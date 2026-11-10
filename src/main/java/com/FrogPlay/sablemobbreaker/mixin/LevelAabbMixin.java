@@ -17,8 +17,6 @@ public class LevelAabbMixin {
 
     @Inject(method = "getEntities(Lnet/minecraft/world/entity/Entity;Lnet/minecraft/world/phys/AABB;Ljava/util/function/Predicate;)Ljava/util/List;", at = @At("HEAD"), cancellable = true)
     private void sablemobbreaker$preventHugeAabb(Entity entity, AABB area, Predicate<? super Entity> predicate, CallbackInfoReturnable<List<Entity>> cir) {
-        // Если хитбокс превышает 100 блоков по любой оси — это баг Sable/KCC.
-        // Возвращаем пустой список, чтобы предотвратить зависание и спам в логах.
         if (area.getXsize() > 100.0 || area.getYsize() > 100.0 || area.getZsize() > 100.0) {
             cir.setReturnValue(Collections.emptyList());
         }

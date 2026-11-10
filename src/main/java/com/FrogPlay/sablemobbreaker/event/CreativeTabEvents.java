@@ -17,12 +17,12 @@ public class CreativeTabEvents {
         }
 
         if (event.getTabKey() == CreativeModeTabs.INGREDIENTS) {
-            event.accept(SableMobBreaker.CLOCK_00.get());
-            event.accept(SableMobBreaker.BUCKET.get());
-            event.accept(SableMobBreaker.ONE_OAK_SIGN.get());
-            event.accept(SableMobBreaker.STRING.get());
-            event.accept(SableMobBreaker.OAK_SIGN.get());
-            event.accept(SableMobBreaker.SPYGLASS.get());
+            event.accept(SableMobBreaker.FLOW_METER.get());
+            event.accept(SableMobBreaker.ELECTRODE.get());
+            event.accept(SableMobBreaker.PLASTIC_PLATE.get());
+            event.accept(SableMobBreaker.WIRE.get());
+            event.accept(SableMobBreaker.DISPLAY_SCREEN.get());
+            event.accept(SableMobBreaker.NOZZLE.get());
         }
     }
 }

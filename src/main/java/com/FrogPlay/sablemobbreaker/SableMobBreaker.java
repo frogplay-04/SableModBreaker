@@ -26,31 +26,29 @@ public class SableMobBreaker {
 
     public static final DeferredRegister.Items ITEMS = DeferredRegister.createItems(MOD_ID);
 
-    // === СУЩЕСТВУЮЩИЕ ПРЕДМЕТЫ ===
     public static final DeferredHolder<Item, WeldingTorchItem> WELDING_TORCH =
             ITEMS.register("welding_torch", () -> new WeldingTorchItem(new Item.Properties().stacksTo(1)));
 
     public static final DeferredHolder<Item, FuelTankItem> FUEL_TANK =
             ITEMS.register("fuel_tank", () -> new FuelTankItem(new Item.Properties().stacksTo(1)));
 
-    // === НОВЫЕ 6 ПРЕДМЕТОВ (НАЗВАНИЯ КАК НА ТВОИХ КАРТИНКАХ) ===
-    public static final DeferredHolder<Item, Item> CLOCK_00 =
-            ITEMS.register("clock_00", () -> new Item(new Item.Properties()));
+    public static final DeferredHolder<Item, Item> FLOW_METER =
+            ITEMS.register("flow_meter", () -> new Item(new Item.Properties()));
 
-    public static final DeferredHolder<Item, Item> BUCKET =
-            ITEMS.register("bucket", () -> new Item(new Item.Properties()));
+    public static final DeferredHolder<Item, Item> ELECTRODE =
+            ITEMS.register("electrode", () -> new Item(new Item.Properties()));
 
-    public static final DeferredHolder<Item, Item> ONE_OAK_SIGN =
-            ITEMS.register("1oak_sign", () -> new Item(new Item.Properties()));
+    public static final DeferredHolder<Item, Item> PLASTIC_PLATE =
+            ITEMS.register("plastic_plate", () -> new Item(new Item.Properties()));
 
-    public static final DeferredHolder<Item, Item> STRING =
-            ITEMS.register("string", () -> new Item(new Item.Properties()));
+    public static final DeferredHolder<Item, Item> WIRE =
+            ITEMS.register("wire", () -> new Item(new Item.Properties()));
 
-    public static final DeferredHolder<Item, Item> OAK_SIGN =
-            ITEMS.register("oak_sign", () -> new Item(new Item.Properties()));
+    public static final DeferredHolder<Item, Item> DISPLAY_SCREEN =
+            ITEMS.register("display_screen", () -> new Item(new Item.Properties()));
 
-    public static final DeferredHolder<Item, Item> SPYGLASS =
-            ITEMS.register("spyglass", () -> new Item(new Item.Properties()));
+    public static final DeferredHolder<Item, Item> NOZZLE =
+            ITEMS.register("nozzle", () -> new Item(new Item.Properties()));
 
 
     public static final DeferredRegister<MenuType<?>> MENUS = DeferredRegister.create(Registries.MENU, MOD_ID);

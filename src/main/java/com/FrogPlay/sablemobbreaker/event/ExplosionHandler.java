@@ -29,40 +29,31 @@ public class ExplosionHandler {
         List<BlockPos> affectedBlocks = event.getAffectedBlocks();
         if (affectedBlocks.isEmpty()) return;
 
-        // Проходим по всем суб-уровням и проверяем, какие из затронутых блоков
-        // принадлежат им. Удаляем их из списка ванильного взрыва и наносим
-        // урон через нашу систему.
         for (SubLevel subLevel : container.getAllSubLevels()) {
             if (subLevel.isRemoved()) continue;
             if (SubLevelDamageHelper.isRagdoll(subLevel)) continue;
 
             BoundingBox3dc box = subLevel.boundingBox();
 
-            // Собираем блоки, попадающие в bounding box суб-уровня
             List<BlockPos> toRemove = new java.util.ArrayList<>();
 
             for (BlockPos pos : affectedBlocks) {
                 Vec3 center = Vec3.atCenterOf(pos);
                 if (!isInside(box, center)) continue;
 
-                // Проверяем, что блок действительно существует в суб-уровне
-                // (по координатам plot-грида)
                 Vec3 localPos = subLevel.logicalPose().transformPositionInverse(center);
                 BlockPos plotPos = BlockPos.containing(localPos.x, localPos.y, localPos.z);
 
                 if (!isBlockInSubLevel(level, subLevel, plotPos)) continue;
 
-                // Наносим урон через нашу систему
                 float explosionPower = event.getExplosion().radius();
                 int damage = Math.round(explosionPower * 10.0F);
                 SubLevelDamageHelper.damageBlock(
                         level, subLevel, center, damage);
 
-                // Помечаем блок для удаления из ванильного взрыва
                 toRemove.add(pos);
             }
 
-            // Удаляем обработанные блоки из списка ванильного взрыва
             affectedBlocks.removeAll(toRemove);
         }
     }

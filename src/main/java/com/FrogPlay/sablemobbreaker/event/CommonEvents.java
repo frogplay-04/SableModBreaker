@@ -59,7 +59,6 @@ public class CommonEvents {
             mob.goalSelector.addGoal(2, new RamSubLevelGoal(mob, targetGoal));
         }
 
-        // Если моб держит оружие или является стрелком
         if (WeaponClassifier.isRanged(mob) && mob instanceof PathfinderMob pathfinderMob) {
             mob.goalSelector.addGoal(2, new SubLevelRangedAttackGoal(pathfinderMob, 24.0D, 16.0D, 20));
         }

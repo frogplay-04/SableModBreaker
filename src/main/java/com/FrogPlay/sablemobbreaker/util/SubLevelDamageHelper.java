@@ -109,14 +109,12 @@ public class SubLevelDamageHelper {
 
             if (newHp <= 0) {
                 try {
-                    // Обработка многоблочных структур (двери, кровати)
                     if (oldState.hasProperty(BlockStateProperties.DOUBLE_BLOCK_HALF)) {
                         DoubleBlockHalf half = oldState.getValue(BlockStateProperties.DOUBLE_BLOCK_HALF);
                         BlockPos otherPos = half == DoubleBlockHalf.LOWER ? targetBlock.above() : targetBlock.below();
                         BlockState otherState = chunk.getBlockState(otherPos);
 
                         if (otherState.is(oldState.getBlock())) {
-                            // Ломаем вторую половину с огромным уроном, чтобы сработала полная очистка
                             damageSingleBlock(level, subLevel, subLevel.logicalPose().transformPosition(
                                     new Vec3(otherPos.getX() + 0.5, otherPos.getY() + 0.5, otherPos.getZ() + 0.5)), 9999, true);
                         }
@@ -141,7 +139,6 @@ public class SubLevelDamageHelper {
                         }
                     }
 
-                    // Сохраняем в мапу перед удалением
                     BlockHealthManager.saveDestroyedBlock(id, targetBlock.getX(), targetBlock.getY(), targetBlock.getZ(), oldState, savedNbt);
 
                     try {
