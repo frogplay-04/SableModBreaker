@@ -2,10 +2,10 @@
   "item.sablemobbreaker.welding_torch": "Сварочный аппарат",
   "container.sablemobbreaker.welding_torch": "Сварочный аппарат",
   "item.sablemobbreaker.fuel_tank": "Топливный бак",
-  "item.sablemobbreaker.clock_00": "Прибор учёта расхода",
-  "item.sablemobbreaker.bucket": "Электрод",
-  "item.sablemobbreaker.1oak_sign": "Пластиковая пластина",
-  "item.sablemobbreaker.string": "Провод",
-  "item.sablemobbreaker.oak_sign": "Экран",
-  "item.sablemobbreaker.spyglass": "Сопло"
+  "item.sablemobbreaker.flow_meter": "Прибор учёта расхода",
+  "item.sablemobbreaker.electrode": "Электрод",
+  "item.sablemobbreaker.plastic_plate": "Пластиковая пластина",
+  "item.sablemobbreaker.wire": "Провод",
+  "item.sablemobbreaker.display_screen": "Экран",
+  "item.sablemobbreaker.nozzle": "Сопло"
 }

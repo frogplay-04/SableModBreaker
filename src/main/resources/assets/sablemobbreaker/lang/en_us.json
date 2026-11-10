@@ -2,10 +2,10 @@
   "item.sablemobbreaker.welding_torch": "Welding Torch",
   "container.sablemobbreaker.welding_torch": "Welding Torch",
   "item.sablemobbreaker.fuel_tank": "Fuel Tank",
-  "item.sablemobbreaker.clock_00": "Flow metering device",
-  "item.sablemobbreaker.bucket": "Electrode",
-  "item.sablemobbreaker.1oak_sign": "Plastic plate",
-  "item.sablemobbreaker.string": "Wire",
-  "item.sablemobbreaker.oak_sign": "Screen",
-  "item.sablemobbreaker.spyglass": "Nozzle"
+  "item.sablemobbreaker.flow_meter": "Flow Meter",
+  "item.sablemobbreaker.electrode": "Electrode",
+  "item.sablemobbreaker.plastic_plate": "Plastic Plate",
+  "item.sablemobbreaker.wire": "Wire",
+  "item.sablemobbreaker.display_screen": "Display Screen",
+  "item.sablemobbreaker.nozzle": "Nozzle"
 }
