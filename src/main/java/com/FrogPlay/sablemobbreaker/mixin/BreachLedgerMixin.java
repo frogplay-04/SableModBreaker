@@ -12,10 +12,6 @@ import java.util.UUID;
 @Mixin(targets = "com.maxenonyme.createsubmarine.submarine.compartment.BreachLedger")
 public class BreachLedgerMixin {
 
-    /**
-     * Внедряемся в hasBreach(UUID subId, BlockPos pos) — если у нашего блока 0 HP,
-     * считаем его пробоиной, и вода пойдёт через него.
-     */
     @Inject(method = "hasBreach", at = @At("HEAD"), cancellable = true, remap = false)
     private static void sablemobbreaker$checkOurBreach(UUID subId, BlockPos pos,
                                                        CallbackInfoReturnable<Boolean> cir) {

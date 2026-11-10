@@ -17,7 +17,6 @@ public class SubLevelTargetHelper {
 
     public record Found(SubLevel subLevel, BlockPos localPos) {}
 
-    /** Находит ближайший целый блок в радиусе от указанной мировой позиции. */
     public static Optional<Found> findNearestBlock(ServerLevel level, Vec3 worldPos, double radius) {
         var container = SubLevelContainer.getContainer(level);
         if (container == null) return Optional.empty();
@@ -65,13 +64,11 @@ public class SubLevelTargetHelper {
         return nearestSubLevel != null ? Optional.of(new Found(nearestSubLevel, nearestLocalPos)) : Optional.empty();
     }
 
-    /** Переводит локальные координаты блока в мировые. */
     public static Vec3 localToWorld(SubLevel subLevel, BlockPos localPos) {
         Vec3 local = new Vec3(localPos.getX() + 0.5, localPos.getY() + 0.5, localPos.getZ() + 0.5);
         return subLevel.logicalPose().transformPosition(local);
     }
 
-    /** Проверяет, есть ли прямая видимость от глаз моба до целевой позиции. */
     public static boolean hasLineOfSight(net.minecraft.world.entity.Mob mob, Vec3 targetPos) {
         Vec3 eyePos = mob.getEyePosition();
         var clipContext = new ClipContext(

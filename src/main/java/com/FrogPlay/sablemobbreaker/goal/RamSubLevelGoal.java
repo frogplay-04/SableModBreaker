@@ -25,7 +25,6 @@ public class RamSubLevelGoal extends Goal {
 
     @Override
     public boolean canUse() {
-        // Только под водой
         if (!this.mob.isInWater()) return false;
         // Только крупные мобы (ширина или высота > 3)
         if (this.mob.getBbWidth() <= 3.0F && this.mob.getBbHeight() <= 3.0F) return false;
@@ -33,7 +32,6 @@ public class RamSubLevelGoal extends Goal {
         SubLevel target = this.targetProvider.getTargetSubLevel();
         if (target == null || target.isRemoved()) return false;
 
-        // Игнорируем рэгдоллы
         if (SubLevelDamageHelper.isRagdoll(target)) return false;
 
         return true;
@@ -69,7 +67,6 @@ public class RamSubLevelGoal extends Goal {
 
         this.mob.getLookControl().setLookAt(cx, cy, cz);
 
-        // Плывем к цели
         if (--this.repathCooldown <= 0) {
             this.repathCooldown = 10;
             this.mob.getNavigation().moveTo(cx, cy, cz, 1.5D);
@@ -80,34 +77,29 @@ public class RamSubLevelGoal extends Goal {
             return;
         }
 
-        // Проверка столкновения (ручная, чтобы не крашилось на методах Sable)
         AABB mobBox = this.mob.getBoundingBox().inflate(0.6);
         boolean intersects = (mobBox.maxX >= box.minX() && mobBox.minX <= box.maxX())
                 && (mobBox.maxY >= box.minY() && mobBox.minY <= box.maxY())
                 && (mobBox.maxZ >= box.minZ() && mobBox.minZ <= box.maxZ());
 
         if (intersects) {
-            // Точка удара — передняя часть моба
             Vec3 look = this.mob.getLookAngle();
             Vec3 hitPos = this.mob.position()
                     .add(look.scale(this.mob.getBbWidth() / 2.0))
                     .add(0, this.mob.getBbHeight() / 2.0, 0);
 
-            // Урон блокам (20 единиц за таран)
             SubLevelDamageHelper.damageBlock(this.mob.level(), target, hitPos, 20);
 
-            // Отскок назад
             Vec3 reverse = look.reverse().scale(1.8D);
             this.mob.setDeltaMovement(reverse.x, 0.4D, reverse.z);
             this.mob.hurtMarked = true;
 
-            // Звук удара
             this.mob.level().playSound(null,
                     this.mob.getX(), this.mob.getY(), this.mob.getZ(),
                     net.minecraft.sounds.SoundEvents.GENERIC_EXPLODE.value(),
                     net.minecraft.sounds.SoundSource.HOSTILE, 1.0F, 0.8F);
 
-            this.ramCooldown = 40; // 2 секунды перезарядка
+            this.ramCooldown = 40;
         }
     }
 

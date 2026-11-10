@@ -42,7 +42,6 @@ public class WeldingTorchItem extends Item {
         return InteractionResultHolder.sidedSuccess(stack, level.isClientSide);
     }
 
-    // === Полоска топлива на самом предмете ===
     @Override
     public boolean isBarVisible(ItemStack stack) {
         ItemStack bottle = getBottle(stack);
@@ -62,19 +61,16 @@ public class WeldingTorchItem extends Item {
         return 0x00AAFF;
     }
 
-    // === Тултип в инвентаре ===
     @Override
     public void appendHoverText(ItemStack stack, TooltipContext context, List<Component> tooltip, TooltipFlag flag) {
         ItemStack bottle = getBottle(stack);
 
-        // 1. Состояние (ВКЛ/ВЫКЛ)
         if (isOn(stack)) {
             tooltip.add(Component.literal("Состояние: ВКЛ").withStyle(ChatFormatting.GREEN));
         } else {
             tooltip.add(Component.literal("Состояние: ВЫКЛ").withStyle(ChatFormatting.DARK_GRAY));
         }
 
-        // 2. Информация о баллоне
         if (bottle.isEmpty()) {
             tooltip.add(Component.literal("Баллон: пусто").withStyle(ChatFormatting.DARK_GRAY));
         } else {

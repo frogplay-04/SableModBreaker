@@ -42,13 +42,6 @@ public record BlockHealthSyncPacket(UUID subLevelId, int x, int y, int z, int hp
                         packet.hp(), packet.maxHp()
                 );
 
-                // === ВРЕМЕННО ОТКЛЮЧЕНО ===
-                // Скрытие блока на клиенте через setBlockState ломает Sable-регион
-                // даже в single-player. Вернёмся к этому через Mixin в рендер.
-                // if (packet.hp() <= 0) {
-                //     ClientBlockHider.queueHide(packet.subLevelId(), packet.x(), packet.y(), packet.z());
-                // }
-
                 ClientEvents.markDirty();
             } catch (Throwable t) {
                 SableMobBreaker.LOGGER.warn("[SMB][CLIENT] handle error: {}", t.toString());

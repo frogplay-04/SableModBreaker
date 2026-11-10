@@ -36,7 +36,6 @@ public class ClientSyncHelper {
         String tag = "[SMB SYNC]";
         SableMobBreaker.LOGGER.info("{} START pos={} state={}", tag, plotPos, newState);
 
-        // 1. Sable API
         try {
             holder.handleBlockChange(blockInChunk.getX(), blockInChunk.getY(), blockInChunk.getZ(), oldState, newState);
             SableMobBreaker.LOGGER.info("{} method=holder.handleBlockChange OK", tag);
@@ -44,7 +43,6 @@ public class ClientSyncHelper {
             SableMobBreaker.LOGGER.error("{} method=holder.handleBlockChange FAIL {}", tag, t.toString());
         }
 
-        // 2. Прямая запись в чанк
         try {
             chunk.setBlockState(blockInChunk, newState, false);
             SableMobBreaker.LOGGER.info("{} method=chunk.setBlockState OK", tag);
@@ -59,7 +57,6 @@ public class ClientSyncHelper {
         );
         BlockPos worldBlockPos = BlockPos.containing(worldCenter);
 
-        // 3. sendBlockUpdated
         try {
             serverLevel.sendBlockUpdated(worldBlockPos, oldState, newState, 3);
             SableMobBreaker.LOGGER.info("{} method=serverLevel.sendBlockUpdated OK", tag);
@@ -67,7 +64,6 @@ public class ClientSyncHelper {
             SableMobBreaker.LOGGER.error("{} method=serverLevel.sendBlockUpdated FAIL {}", tag, t.toString());
         }
 
-        // 4. blockChanged
         try {
             serverLevel.getChunkSource().blockChanged(worldBlockPos);
             SableMobBreaker.LOGGER.info("{} method=serverLevel.getChunkSource().blockChanged OK", tag);
@@ -75,7 +71,6 @@ public class ClientSyncHelper {
             SableMobBreaker.LOGGER.error("{} method=blockChanged FAIL {}", tag, t.toString());
         }
 
-        // 5. Прямой setBlock (опасно, но ты просил все методы)
         try {
             serverLevel.setBlock(worldBlockPos, newState, 3);
             SableMobBreaker.LOGGER.info("{} method=serverLevel.setBlock OK", tag);
@@ -83,7 +78,6 @@ public class ClientSyncHelper {
             SableMobBreaker.LOGGER.error("{} method=serverLevel.setBlock FAIL {}", tag, t.toString());
         }
 
-        // 6. Пакеты
         try {
             ClientboundBlockUpdatePacket worldPacket = new ClientboundBlockUpdatePacket(worldBlockPos, newState);
             ClientboundBlockUpdatePacket plotPacket = new ClientboundBlockUpdatePacket(plotPos, newState);

@@ -52,7 +52,6 @@ public class SableBlockUpdateMixin {
         int sy = pos.getY() >> 4;
         int sz = pos.getZ() >> 4;
 
-        // 1. Sable render data
         try {
             clientSubLevel.getRenderData().setDirty(sx, sy, sz, true);
             SableMobBreaker.LOGGER.info("{} method=ClientSubLevel.getRenderData().setDirty OK", tag);
@@ -60,7 +59,6 @@ public class SableBlockUpdateMixin {
             SableMobBreaker.LOGGER.error("{} method=setDirty FAIL {}", tag, t.toString());
         }
 
-        // 2. Vanilla LevelRenderer
         try {
             Minecraft.getInstance().levelRenderer.setSectionDirty(sx, sy, sz);
             SableMobBreaker.LOGGER.info("{} method=levelRenderer.setSectionDirty OK", tag);

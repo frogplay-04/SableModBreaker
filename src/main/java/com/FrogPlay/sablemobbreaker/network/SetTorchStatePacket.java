@@ -34,7 +34,6 @@ public record SetTorchStatePacket(boolean state) implements CustomPacketPayload 
                     boolean wasOn = WeldingTorchItem.isOn(stack);
                     if (wasOn != packet.state()) {
                         WeldingTorchItem.setOn(stack, packet.state());
-                        // Звук при включении/выключении
                         player.level().playSound(null, player.getX(), player.getY(), player.getZ(),
                                 packet.state() ? SoundEvents.FLINTANDSTEEL_USE : SoundEvents.FIRE_EXTINGUISH,
                                 SoundSource.PLAYERS, 0.5F, packet.state() ? 1.0F : 1.5F);

@@ -136,12 +136,16 @@ public class CommonEvents {
     private static float getBaseDamage(Projectile projectile) {
         ResourceLocation id = BuiltInRegistries.ENTITY_TYPE.getKey(projectile.getType());
         String namespace = id.getNamespace();
+
         if (namespace.equals("scguns")) return 5.0F;
         if (namespace.equals("createbigcannons")) return 20.0F;
-        if (projectile instanceof net.minecraft.world.entity.projectile.AbstractArrow) return 2.0F;
+
         if (projectile instanceof net.minecraft.world.entity.projectile.ThrownTrident) return 4.0F;
+        if (projectile instanceof net.minecraft.world.entity.projectile.AbstractArrow) return 2.0F;
+
         if (projectile instanceof net.minecraft.world.entity.projectile.AbstractHurtingProjectile) return 6.0F;
         if (projectile instanceof net.minecraft.world.entity.projectile.Snowball) return 1.0F;
+
         return 3.0F;
     }
 }

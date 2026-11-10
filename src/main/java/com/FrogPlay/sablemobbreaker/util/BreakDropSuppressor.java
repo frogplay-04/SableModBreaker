@@ -6,16 +6,6 @@ import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.event.entity.EntityJoinLevelEvent;
 
-/**
- * Гасит ItemEntity, которые пытаются заспавниться в только что сломанной
- * позиции. Единственная причина существования этого класса — Copycat-блоки
- * Create, которые при handleBlockChange успевают вернуть мимикрированный
- * предмет через getDrops/getCloneItemStack до отсоединения BlockEntity.
- *
- * Работает поверх RecentBreakTracker из SubLevelDamageHelper: если в момент
- * спавна предмета его позиция ближе 1.5 блока к недавно сломанному блоку —
- * спавн отменяется. Окно 2 секунды, чтобы поймать отложенные дропы.
- */
 @EventBusSubscriber(modid = SableMobBreaker.MOD_ID)
 public class BreakDropSuppressor {
 

@@ -29,7 +29,6 @@ public class SubLevelRangedAttackGoal extends Goal {
     private SubLevel targetSubLevel;
     private BlockPos targetLocalPos;
 
-    // Реальный маркер в мире для арбалетчиков и Scorched Guns
     private ArmorStand ghostTarget;
 
     public SubLevelRangedAttackGoal(PathfinderMob mob, double searchRadius, double attackRange, int fireCooldownTicks) {
@@ -86,10 +85,8 @@ public class SubLevelRangedAttackGoal extends Goal {
         Vec3 worldPos = SubLevelTargetHelper.localToWorld(this.targetSubLevel, this.targetLocalPos);
         double distSqr = this.mob.position().distanceToSqr(worldPos);
 
-        // Наводим взгляд моба на блок
         this.mob.getLookControl().setLookAt(worldPos.x, worldPos.y, worldPos.z);
 
-        // Если далеко — идем ближе
         if (distSqr > this.attackRange * this.attackRange) {
             this.mob.getNavigation().moveTo(worldPos.x, worldPos.y, worldPos.z, 1.0);
             return;
@@ -97,16 +94,13 @@ public class SubLevelRangedAttackGoal extends Goal {
 
         this.mob.getNavigation().stop();
 
-        // Проверка видимости (чтобы не стреляли сквозь стены)
         if (!SubLevelTargetHelper.hasLineOfSight(this.mob, worldPos)) return;
 
-        // Кулдаун выстрела
         if (this.cooldown > 0) {
             this.cooldown--;
             return;
         }
 
-        // Ищем новую цель, если эту сломали
         if (--this.retargetTimer <= 0) {
             this.retargetTimer = 20;
             if (isTargetBlockGone()) {
@@ -115,14 +109,11 @@ public class SubLevelRangedAttackGoal extends Goal {
             }
         }
 
-        // Стреляем!
         this.cooldown = this.fireCooldownTicks;
         fireAttack(worldPos);
     }
 
     private void fireAttack(Vec3 targetPos) {
-        // 1. Арбалетчики (Pillager) и Scorched Guns используют сложный ИИ,
-        // поэтому им нужна реальная сущность в мире.
         if (this.mob instanceof Pillager || WeaponClassifier.isHoldingScorchedGunsWeapon(this.mob)) {
             if (ghostTarget == null || ghostTarget.isRemoved()) {
                 ghostTarget = new ArmorStand(this.mob.level(), targetPos.x, targetPos.y, targetPos.z);
@@ -136,19 +127,15 @@ public class SubLevelRangedAttackGoal extends Goal {
             ghostTarget.setPos(targetPos.x, targetPos.y, targetPos.z);
             ghostTarget.setOldPosAndRot();
 
-            // Даем цель, ИИ моба сам натянет арбалет и выстрелит
             if (this.mob.getTarget() != ghostTarget) {
                 this.mob.setTarget(ghostTarget);
             }
             return;
         }
 
-        // 2. Обычные стрелки (Скелеты, Блейзы) и врожденные стрелки
         if (this.mob instanceof RangedAttackMob rangedMob) {
-            // Защита от краша "Invalid weapon firing an arrow" (взер-скелет с мечом)
             boolean hasValidWeapon = WeaponClassifier.isHoldingRangedWeapon(this.mob) || WeaponClassifier.isNaturalShooter(this.mob);
             if (hasValidWeapon) {
-                // Создаем цель ТОЛЬКО В ПАМЯТИ (без addFreshEntity)
                 LivingEntity virtualTarget = new ArmorStand(this.mob.level(), targetPos.x, targetPos.y, targetPos.z);
                 rangedMob.performRangedAttack(virtualTarget, 1.0F);
                 this.mob.swing(InteractionHand.MAIN_HAND);

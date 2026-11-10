@@ -39,7 +39,6 @@ public class FuelTankFluidHandler implements IFluidHandlerItem {
         return FluidStack.EMPTY;
     }
 
-    // Сохраняет FluidStack в CustomData
     private void setFluid(FluidStack stack) {
         CompoundTag tag = container.getOrDefault(DataComponents.CUSTOM_DATA, CustomData.EMPTY).copyTag();
         if (stack.isEmpty()) {

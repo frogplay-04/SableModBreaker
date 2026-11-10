@@ -20,7 +20,6 @@ public class WeldingTorchMenu extends AbstractContainerMenu {
 
         IItemHandler handler = new WeldingTorchInventory(torch);
 
-        // Слот для баллона ровно по центру (координаты под текстуру воронки)
         this.addSlot(new SlotItemHandler(handler, 0, 80, 20) {
             @Override
             public boolean mayPlace(ItemStack stack) {
@@ -28,14 +27,12 @@ public class WeldingTorchMenu extends AbstractContainerMenu {
             }
         });
 
-        // Стандартный инвентарь игрока (как в воронке)
         for (int i = 0; i < 3; ++i) {
             for (int j = 0; j < 9; ++j) {
                 this.addSlot(new Slot(playerInv, j + i * 9 + 9, 8 + j * 18, 51 + i * 18));
             }
         }
 
-        // Хотбар
         for (int k = 0; k < 9; ++k) {
             this.addSlot(new Slot(playerInv, k, 8 + k * 18, 109));
         }

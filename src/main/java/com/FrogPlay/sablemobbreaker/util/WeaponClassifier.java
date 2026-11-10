@@ -51,10 +51,6 @@ public final class WeaponClassifier {
         return id.getNamespace().equals("spartanweaponry");
     }
 
-    /**
-     * Автоматически определяет врожденных стрелков (Блейз, Гаст, Скелет и т.д.).
-     * Исключает арбалетчиков, так как у них другая механика стрельбы.
-     */
     public static boolean isNaturalShooter(Mob mob) {
         if (mob instanceof Pillager) return false; // У Pillager своя логика арбалета
         return mob instanceof RangedAttackMob;

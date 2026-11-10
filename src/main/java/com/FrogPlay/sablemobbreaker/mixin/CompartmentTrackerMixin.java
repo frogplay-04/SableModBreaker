@@ -14,10 +14,6 @@ import java.util.UUID;
 @Mixin(targets = "com.maxenonyme.createsubmarine.submarine.compartment.CompartmentTracker")
 public class CompartmentTrackerMixin {
 
-    /**
-     * Перехватывает метод plugs(UUID), который возвращает набор пробоин.
-     * Добавляет в этот набор все блоки с HP=0 из нашего BlockHealthManager.
-     */
     @Inject(method = "plugs", at = @At("RETURN"), cancellable = true, remap = false)
     private static void sablemobbreaker$addOurPlugs(UUID id,
                                                     CallbackInfoReturnable<Set<BlockPos>> cir) {

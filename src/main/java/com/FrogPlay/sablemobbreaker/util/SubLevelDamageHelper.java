@@ -129,7 +129,6 @@ public class SubLevelDamageHelper {
                     BlockState recheck = chunk.getBlockState(targetBlock);
                     if (recheck != oldState) return false;
 
-                    // Безопасное сохранение NBT
                     CompoundTag savedNbt = null;
                     if (be != null) {
                         try {
@@ -149,7 +148,6 @@ public class SubLevelDamageHelper {
 
                     BlockState brokenState = ModBlocks.BROKEN_BLOCK.get().defaultBlockState();
 
-                    // ИСПОЛЬЗУЕМ ТОЛЬКО SABLE API. НИКАКОГО ВМЕШАТЕЛЬСТВА В МАССИВ БЛОКОВ.
                     try {
                         holder.handleBlockChange(targetBlock.getX(), targetBlock.getY(), targetBlock.getZ(), oldState, brokenState);
                     } catch (Throwable t) {

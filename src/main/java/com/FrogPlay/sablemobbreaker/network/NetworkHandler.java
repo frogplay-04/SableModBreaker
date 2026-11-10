@@ -13,14 +13,12 @@ public class NetworkHandler {
     public static void register(RegisterPayloadHandlersEvent event) {
         PayloadRegistrar registrar = event.registrar("1");
 
-        // Твой старый пакет для синхронизации ХП
         registrar.playToClient(
                 BlockHealthSyncPacket.TYPE,
                 BlockHealthSyncPacket.STREAM_CODEC,
                 BlockHealthSyncPacket::handle
         );
 
-        // Новый пакет для принудительной установки состояния
         registrar.playToServer(
                 SetTorchStatePacket.TYPE,
                 SetTorchStatePacket.STREAM_CODEC,

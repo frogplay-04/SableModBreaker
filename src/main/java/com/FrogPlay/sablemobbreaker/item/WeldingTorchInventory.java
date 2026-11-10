@@ -20,7 +20,6 @@ public class WeldingTorchInventory extends ItemStackHandler {
         ItemStack current = getStackInSlot(0);
         WeldingTorchItem.setBottle(torch, current);
 
-        // Если положили взрывоопасный баллон, запускаем таймер
         if (!current.isEmpty() && WeldingTorchHandler.isOxygenBottle(current)) {
             WeldingTorchItem.setFuse(torch, 20); // 20 тиков = 1 секунда
         } else {

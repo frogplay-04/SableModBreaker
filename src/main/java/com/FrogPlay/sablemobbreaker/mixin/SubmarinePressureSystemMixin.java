@@ -11,12 +11,6 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 @Mixin(targets = "com.maxenonyme.createsubmarine.submarine.system.SubmarinePressureSystem")
 public class SubmarinePressureSystemMixin {
 
-    /**
-     * Перехватываем onBlockBroken — если блок сломан И у него 0 HP,
-     * Deep Seas сам добавит его в BreachLedger.
-     * (Наш мод не вызывает BreakEvent, поэтому без этого миксина
-     * Deep Seas не узнает о пробоине.)
-     */
     @Inject(method = "onBlockBroken", at = @At("HEAD"), remap = false)
     private static void sablemobbreaker$onBlockBroken(
             net.neoforged.neoforge.event.level.BlockEvent.BreakEvent event,

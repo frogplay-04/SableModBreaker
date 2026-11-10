@@ -56,10 +56,6 @@ public final class BlockHealthManager {
         return 20;
     }
 
-    // ============================================================
-    // Определение HP для Copycat блоков (с учетом текстуры)
-    // ============================================================
-
     public static int getMaxHp(BlockState state, BlockEntity be) {
         BlockState mimicked = getMimickedState(be);
         if (mimicked != null) return getMaxHp(mimicked);
