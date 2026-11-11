@@ -5,8 +5,10 @@ import net.minecraft.core.registries.Registries;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.tags.TagKey;
 import net.minecraft.world.entity.Mob;
+import net.minecraft.world.entity.monster.Illusioner;
 import net.minecraft.world.entity.monster.Pillager;
 import net.minecraft.world.entity.monster.RangedAttackMob;
+import net.minecraft.world.entity.monster.AbstractSkeleton;
 import net.minecraft.world.item.BowItem;
 import net.minecraft.world.item.CrossbowItem;
 import net.minecraft.world.item.Item;
@@ -52,7 +54,9 @@ public final class WeaponClassifier {
     }
 
     public static boolean isNaturalShooter(Mob mob) {
-        if (mob instanceof Pillager) return false; // У Pillager своя логика арбалета
+        if (mob instanceof AbstractSkeleton || mob instanceof Illusioner || mob instanceof Pillager) {
+            return false;
+        }
         return mob instanceof RangedAttackMob;
     }
 }
