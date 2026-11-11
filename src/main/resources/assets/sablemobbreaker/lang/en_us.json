@@ -4,8 +4,8 @@
   "item.sablemobbreaker.fuel_tank": "Fuel Tank",
   "item.sablemobbreaker.flow_meter": "Flow Meter",
   "item.sablemobbreaker.electrode": "Electrode",
-  "item.sablemobbreaker.plastic_plate": "Plastic Plate",
   "item.sablemobbreaker.wire": "Wire",
   "item.sablemobbreaker.display_screen": "Display Screen",
-  "item.sablemobbreaker.nozzle": "Nozzle"
+  "item.sablemobbreaker.nozzle": "Nozzle",
+  "item.sablemobbreaker.control_panel": "Control Panel"
 }

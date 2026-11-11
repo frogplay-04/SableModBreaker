@@ -4,8 +4,8 @@
   "item.sablemobbreaker.fuel_tank": "Топливный бак",
   "item.sablemobbreaker.flow_meter": "Прибор учёта расхода",
   "item.sablemobbreaker.electrode": "Электрод",
-  "item.sablemobbreaker.plastic_plate": "Пластиковая пластина",
   "item.sablemobbreaker.wire": "Провод",
   "item.sablemobbreaker.display_screen": "Экран",
-  "item.sablemobbreaker.nozzle": "Сопло"
+  "item.sablemobbreaker.nozzle": "Сопло",
+  "item.sablemobbreaker.control_panel": "Контроллер"
 }
