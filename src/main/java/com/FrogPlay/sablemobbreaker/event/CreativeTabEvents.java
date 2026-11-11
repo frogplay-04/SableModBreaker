@@ -23,6 +23,10 @@ public class CreativeTabEvents {
             event.accept(SableMobBreaker.DISPLAY_SCREEN.get());
             event.accept(SableMobBreaker.NOZZLE.get());
             event.accept(SableMobBreaker.CONTROL_PANEL.get());
+            event.accept(SableMobBreaker.LARGE_WELDING_HANDLE.get());
+            event.accept(SableMobBreaker.WELDING_HANDLE.get());
+            event.accept(SableMobBreaker.LARGE_PLASMA_HANDLE.get());
+            event.accept(SableMobBreaker.PLASMA_HANDLE.get());
         }
     }
 }

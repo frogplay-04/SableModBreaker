@@ -1,0 +1,24 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "misc",
+  "pattern": [
+    "III",
+    "ILC",
+    "III"
+  ],
+  "key": {
+    "I": {
+      "item": "create:iron_sheet"
+    },
+    "L": {
+      "item": "minecraft:lightning_rod"
+    },
+    "C": {
+      "item": "create:copper_sheet"
+    }
+  },
+  "result": {
+    "id": "sablemobbreaker:electrode",
+    "count": 1
+  }
+}

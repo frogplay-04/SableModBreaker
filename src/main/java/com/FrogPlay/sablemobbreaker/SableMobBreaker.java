@@ -49,6 +49,17 @@ public class SableMobBreaker {
 
     public static final DeferredHolder<Item, Item> CONTROL_PANEL =
             ITEMS.register("control_panel", () -> new Item(new Item.Properties()));
+    public static final DeferredHolder<Item, Item> LARGE_WELDING_HANDLE =
+            ITEMS.register("large_welding_handle", () -> new Item(new Item.Properties()));
+
+    public static final DeferredHolder<Item, Item> WELDING_HANDLE =
+            ITEMS.register("welding_handle", () -> new Item(new Item.Properties()));
+
+    public static final DeferredHolder<Item, Item> LARGE_PLASMA_HANDLE =
+            ITEMS.register("large_plasma_handle", () -> new Item(new Item.Properties()));
+
+    public static final DeferredHolder<Item, Item> PLASMA_HANDLE =
+            ITEMS.register("plasma_handle", () -> new Item(new Item.Properties()));
 
 
     public static final DeferredRegister<MenuType<?>> MENUS = DeferredRegister.create(Registries.MENU, MOD_ID);

@@ -1,0 +1,21 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "misc",
+  "pattern": [
+    " B ",
+    " S ",
+    " S "
+  ],
+  "key": {
+    "B": {
+      "item": "minecraft:iron_ingot"
+    },
+    "S": {
+      "item": "create:iron_sheet"
+    }
+  },
+  "result": {
+    "id": "sablemobbreaker:nozzle",
+    "count": 1
+  }
+}

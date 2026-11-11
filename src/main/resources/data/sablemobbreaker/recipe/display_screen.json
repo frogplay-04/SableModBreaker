@@ -1,0 +1,24 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "misc",
+  "pattern": [
+    "III",
+    "TET",
+    "III"
+  ],
+  "key": {
+    "I": {
+      "item": "create:iron_sheet"
+    },
+    "T": {
+      "item": "minecraft:tinted_glass"
+    },
+    "E": {
+      "item": "create:electron_tube"
+    }
+  },
+  "result": {
+    "id": "sablemobbreaker:display_screen",
+    "count": 1
+  }
+}

@@ -7,5 +7,9 @@
   "item.sablemobbreaker.wire": "Провод",
   "item.sablemobbreaker.display_screen": "Экран",
   "item.sablemobbreaker.nozzle": "Сопло",
-  "item.sablemobbreaker.control_panel": "Контроллер"
+  "item.sablemobbreaker.control_panel": "Контроллер",
+  "item.sablemobbreaker.large_welding_handle": "Большая рукоятка для сварочного аппарата",
+  "item.sablemobbreaker.welding_handle": "Рукоятка для сварочного аппарата",
+  "item.sablemobbreaker.large_plasma_handle": "Большая рукоятка для плазменного резака",
+  "item.sablemobbreaker.plasma_handle": "Рукоятка для плазменного резака"
 }

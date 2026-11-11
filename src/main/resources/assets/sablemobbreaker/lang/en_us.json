@@ -7,5 +7,9 @@
   "item.sablemobbreaker.wire": "Wire",
   "item.sablemobbreaker.display_screen": "Display Screen",
   "item.sablemobbreaker.nozzle": "Nozzle",
-  "item.sablemobbreaker.control_panel": "Control Panel"
+  "item.sablemobbreaker.control_panel": "Control Panel",
+  "item.sablemobbreaker.large_welding_handle": "Large Welding Handle",
+  "item.sablemobbreaker.welding_handle": "Welding Handle",
+  "item.sablemobbreaker.large_plasma_handle": "Large Plasma Handle",
+  "item.sablemobbreaker.plasma_handle": "Plasma Handle"
 }
