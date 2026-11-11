@@ -19,10 +19,10 @@ public class CreativeTabEvents {
         if (event.getTabKey() == CreativeModeTabs.INGREDIENTS) {
             event.accept(SableMobBreaker.FLOW_METER.get());
             event.accept(SableMobBreaker.ELECTRODE.get());
-            event.accept(SableMobBreaker.PLASTIC_PLATE.get());
             event.accept(SableMobBreaker.WIRE.get());
             event.accept(SableMobBreaker.DISPLAY_SCREEN.get());
             event.accept(SableMobBreaker.NOZZLE.get());
+            event.accept(SableMobBreaker.CONTROL_PANEL.get());
         }
     }
 }
