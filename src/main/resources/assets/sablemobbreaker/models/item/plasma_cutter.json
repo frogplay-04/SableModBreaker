@@ -3,6 +3,7 @@
 	"credit": "Made with Blockbench",
 	"parent": "item/handheld",
 	"texture_size": [64, 64],
+	"render_type": "minecraft:cutout",
 	"textures": {
 		"0": "sablemobbreaker:item/plasma_cutter",
 		"particle": "sablemobbreaker:item/plasma_cutter"
@@ -515,43 +516,5 @@
 				"down": {"uv": [0.5, 8.875, 0.75, 9], "texture": "#0"}
 			}
 		}
-	],
-	"display": {
-		"thirdperson_righthand": {
-			"rotation": [0, -180, 0],
-			"translation": [0, -5, -5.75]
-		},
-		"thirdperson_lefthand": {
-			"rotation": [0, -180, 0],
-			"translation": [0, -5, -5.75]
-		},
-		"firstperson_righthand": {
-			"rotation": [0, -180, 0],
-			"translation": [0, -5, -5.75]
-		},
-		"firstperson_lefthand": {
-			"rotation": [0, -180, 0],
-			"translation": [0, -5, -5.75]
-		},
-		"ground": {
-			"rotation": [0, 0, 90],
-			"translation": [6.5, 0, -4]
-		},
-		"gui": {
-			"rotation": [0, 90, 0],
-			"translation": [-3.5, -5.75, 0]
-		},
-		"head": {
-			"rotation": [180, 0, 90],
-			"translation": [6.5, 8, 2.25]
-		},
-		"fixed": {
-			"rotation": [0, 90, 0],
-			"translation": [-3.5, -5.75, 0]
-		},
-		"on_shelf": {
-			"rotation": [0, 90, 0],
-			"translation": [-3.5, -5.75, 0]
-		}
-	}
+	]
 }
