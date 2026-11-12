@@ -14,6 +14,7 @@ public class CreativeTabEvents {
         if (event.getTabKey() == CreativeModeTabs.TOOLS_AND_UTILITIES) {
             event.accept(SableMobBreaker.WELDING_TORCH.get());
             event.accept(SableMobBreaker.FUEL_TANK.get());
+            event.accept(SableMobBreaker.PLASMA_CUTTER.get());
         }
 
         if (event.getTabKey() == CreativeModeTabs.INGREDIENTS) {

@@ -60,6 +60,8 @@ public class SableMobBreaker {
 
     public static final DeferredHolder<Item, Item> PLASMA_HANDLE =
             ITEMS.register("plasma_handle", () -> new Item(new Item.Properties()));
+    public static final DeferredHolder<Item, Item> PLASMA_CUTTER =
+            ITEMS.register("plasma_cutter", () -> new Item(new Item.Properties().stacksTo(1)));
 
 
     public static final DeferredRegister<MenuType<?>> MENUS = DeferredRegister.create(Registries.MENU, MOD_ID);
