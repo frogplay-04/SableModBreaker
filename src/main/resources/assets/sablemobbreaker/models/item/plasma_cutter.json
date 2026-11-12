@@ -1,7 +1,6 @@
 {
 	"format_version": "1.9.0",
 	"credit": "Made with Blockbench",
-	"parent": "item/handheld",
 	"texture_size": [64, 64],
 	"render_type": "minecraft:cutout",
 	"textures": {
@@ -516,5 +515,44 @@
 				"down": {"uv": [0.5, 8.875, 0.75, 9], "texture": "#0"}
 			}
 		}
-	]
+	],
+	"display": {
+		"thirdperson_righthand": {
+			"rotation": [0, -180, 0],
+			"translation": [0, 0.75, -4.25]
+		},
+		"thirdperson_lefthand": {
+			"rotation": [0, -180, 0],
+			"translation": [0, 0.75, -4.25]
+		},
+		"firstperson_righthand": {
+			"rotation": [0, -180, 0],
+			"translation": [0, 0.75, -4.25]
+		},
+		"firstperson_lefthand": {
+			"rotation": [0, -180, 0],
+			"translation": [0, 0.75, -4.25]
+		},
+		"ground": {
+			"rotation": [2.03, -48.88, -93],
+			"translation": [1.5, 0, -2]
+		},
+		"gui": {
+			"rotation": [0, 90, 0],
+			"translation": [-3, -0.5, 0]
+		},
+		"head": {
+			"rotation": [180, 0, 90],
+			"translation": [0, 8.25, -0.75]
+		},
+		"fixed": {
+			"rotation": [0, -90, 0],
+			"translation": [3, -0.5, 0]
+		},
+		"on_shelf": {
+			"rotation": [0, 90, 0],
+			"translation": [-2.75, -0.5, 0]
+		}
+	},
+	"gui_light": "front"
 }
