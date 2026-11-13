@@ -1,0 +1,14 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "misc",
+  "pattern": [
+    " KK",
+    "KIK",
+    "KK "
+  ],
+  "key": {
+    "K": { "item": "minecraft:dried_kelp" },
+    "I": { "item": "create:iron_sheet" }
+  },
+  "result": { "id": "sablemobbreaker:welding_handle", "count": 1 }
+}

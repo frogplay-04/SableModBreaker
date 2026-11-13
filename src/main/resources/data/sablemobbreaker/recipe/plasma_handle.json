@@ -1,0 +1,14 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "misc",
+  "pattern": [
+    " K ",
+    "KIK",
+    " K "
+  ],
+  "key": {
+    "K": { "item": "minecraft:dried_kelp" },
+    "I": { "item": "create:iron_sheet" }
+  },
+  "result": { "id": "sablemobbreaker:plasma_handle", "count": 1 }
+}

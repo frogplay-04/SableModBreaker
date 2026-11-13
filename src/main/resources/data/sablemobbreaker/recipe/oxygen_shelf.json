@@ -1,0 +1,16 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "misc",
+  "pattern": [
+    "IFI",
+    "ICI",
+    "IEI"
+  ],
+  "key": {
+    "I": { "item": "create:iron_sheet" },
+    "F": { "item": "create:fluid_pipe" },
+    "C": { "item": "minecraft:cyan_dye" },
+    "E": { "item": "create:electron_tube" }
+  },
+  "result": { "id": "sablemobbreaker:oxygen_shelf", "count": 1 }
+}

@@ -1,0 +1,14 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "misc",
+  "pattern": [
+    " K ",
+    "KPK",
+    " K "
+  ],
+  "key": {
+    "K": { "item": "minecraft:dried_kelp" },
+    "P": { "item": "sablemobbreaker:plasma_handle" }
+  },
+  "result": { "id": "sablemobbreaker:large_plasma_handle", "count": 1 }
+}
