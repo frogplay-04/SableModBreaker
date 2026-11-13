@@ -29,6 +29,7 @@ public class CreativeTabEvents {
             event.accept(SableMobBreaker.WELDING_HANDLE.get());
             event.accept(SableMobBreaker.LARGE_PLASMA_HANDLE.get());
             event.accept(SableMobBreaker.PLASMA_HANDLE.get());
+            event.accept(SableMobBreaker.HULL.get());
         }
     }
 }

@@ -20,7 +20,6 @@ public class BreachLedgerMixin {
                 cir.setReturnValue(true);
             }
         } catch (Throwable ignored) {
-            // BreachLedger ещё не инициализирован — пропускаем
         }
     }
 }

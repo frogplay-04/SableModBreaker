@@ -14,4 +14,9 @@ public class ModBlockEntities {
             BLOCK_ENTITIES.register("broken_block", () ->
                     BlockEntityType.Builder.of(BrokenBlockEntity::new, ModBlocks.BROKEN_BLOCK.get()).build(null)
             );
+
+    public static final DeferredHolder<BlockEntityType<?>, BlockEntityType<OxygenShelfBlockEntity>> OXYGEN_SHELF_ENTITY =
+            BLOCK_ENTITIES.register("oxygen_shelf", () ->
+                    BlockEntityType.Builder.of(OxygenShelfBlockEntity::new, ModBlocks.OXYGEN_SHELF.get()).build(null)
+            );
 }

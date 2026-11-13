@@ -27,7 +27,6 @@ public class CompartmentTrackerMixin {
                 cir.setReturnValue(combined);
             }
         } catch (Throwable ignored) {
-            // Deep Seas не установлен или метод не найден — пропускаем
         }
     }
 }
