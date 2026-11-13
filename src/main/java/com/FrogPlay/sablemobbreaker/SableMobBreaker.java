@@ -17,6 +17,7 @@ import net.neoforged.neoforge.common.extensions.IMenuTypeExtension;
 import net.neoforged.neoforge.registries.DeferredHolder;
 import net.neoforged.neoforge.registries.DeferredRegister;
 import org.slf4j.Logger;
+import net.minecraft.world.item.BlockItem;
 
 @Mod(SableMobBreaker.MOD_ID)
 public class SableMobBreaker {
@@ -66,6 +67,8 @@ public class SableMobBreaker {
             ITEMS.register("oxygen_tank", () -> new Item(new Item.Properties().stacksTo(1)));
     public static final DeferredHolder<Item, Item> HULL =
             ITEMS.register("hull", () -> new Item(new Item.Properties()));
+    public static final DeferredHolder<Item, BlockItem> OXYGEN_SHELF_ITEM =
+            ITEMS.register("oxygen_shelf", () -> new BlockItem(ModBlocks.OXYGEN_SHELF.get(), new Item.Properties()));
 
 
     public static final DeferredRegister<MenuType<?>> MENUS = DeferredRegister.create(Registries.MENU, MOD_ID);

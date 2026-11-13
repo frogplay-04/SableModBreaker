@@ -14,5 +14,6 @@
   "item.sablemobbreaker.plasma_handle": "Рукоятка для плазменного резака",
   "item.sablemobbreaker.plasma_cutter": "Плазменный резак",
   "item.sablemobbreaker.oxygen_tank": "Баллон с кислородом",
-  "item.sablemobbreaker.hull": "Корпус"
+  "item.sablemobbreaker.hull": "Корпус",
+  "block.sablemobbreaker.oxygen_shelf": "Полка с кислородными баллонами"
 }

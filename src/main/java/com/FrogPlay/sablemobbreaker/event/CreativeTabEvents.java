@@ -31,5 +31,9 @@ public class CreativeTabEvents {
             event.accept(SableMobBreaker.PLASMA_HANDLE.get());
             event.accept(SableMobBreaker.HULL.get());
         }
+
+        if (event.getTabKey() == CreativeModeTabs.FUNCTIONAL_BLOCKS) {
+            event.accept(SableMobBreaker.OXYGEN_SHELF_ITEM.get());
+        }
     }
 }

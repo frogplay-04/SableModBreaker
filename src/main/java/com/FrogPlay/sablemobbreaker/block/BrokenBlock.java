@@ -1,7 +1,9 @@
 package com.FrogPlay.sablemobbreaker.block;
 
 import net.minecraft.core.BlockPos;
+import net.minecraft.world.entity.Entity;
 import net.minecraft.world.level.BlockGetter;
+import net.minecraft.world.level.Explosion;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.RenderShape;
 import net.minecraft.world.level.block.state.BlockBehaviour;
@@ -17,6 +19,7 @@ public class BrokenBlock extends Block {
                 .noOcclusion()
                 .strength(-1.0F, 3600000.0F)
                 .noLootTable()
+                .replaceable()
                 .isViewBlocking((state, level, pos) -> false)
                 .isSuffocating((state, level, pos) -> false)
         );
@@ -35,5 +38,15 @@ public class BrokenBlock extends Block {
     @Override
     public RenderShape getRenderShape(BlockState state) {
         return RenderShape.INVISIBLE;
+    }
+
+    @Override
+    public boolean canEntityDestroy(BlockState state, BlockGetter level, BlockPos pos, Entity entity) {
+        return false;
+    }
+
+    @Override
+    public float getExplosionResistance(BlockState state, BlockGetter level, BlockPos pos, Explosion explosion) {
+        return 3600000.0F;
     }
 }
