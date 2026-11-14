@@ -19,9 +19,8 @@ import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.SoundType;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
-import net.minecraft.world.level.block.state.properties.BlockStateProperties;
-import net.minecraft.world.level.block.state.properties.DoubleBlockHalf;
 import net.minecraft.world.level.chunk.LevelChunk;
+import net.minecraft.world.level.chunk.LevelChunkSection;
 import net.minecraft.world.phys.Vec3;
 import net.neoforged.neoforge.network.PacketDistributor;
 
@@ -109,17 +108,6 @@ public class SubLevelDamageHelper {
 
             if (newHp <= 0) {
                 try {
-                    if (oldState.hasProperty(BlockStateProperties.DOUBLE_BLOCK_HALF)) {
-                        DoubleBlockHalf half = oldState.getValue(BlockStateProperties.DOUBLE_BLOCK_HALF);
-                        BlockPos otherPos = half == DoubleBlockHalf.LOWER ? targetBlock.above() : targetBlock.below();
-                        BlockState otherState = chunk.getBlockState(otherPos);
-
-                        if (otherState.is(oldState.getBlock())) {
-                            damageSingleBlock(level, subLevel, subLevel.logicalPose().transformPosition(
-                                    new Vec3(otherPos.getX() + 0.5, otherPos.getY() + 0.5, otherPos.getZ() + 0.5)), 9999, true);
-                        }
-                    }
-
                     BlockPos worldBlockPos = BlockPos.containing(
                             subLevel.logicalPose().transformPosition(
                                     new Vec3(targetBlock.getX() + 0.5, targetBlock.getY() + 0.5, targetBlock.getZ() + 0.5)));
@@ -154,8 +142,23 @@ public class SubLevelDamageHelper {
                         SableMobBreaker.LOGGER.error("[SMB] handleBlockChange failed: {}", t.toString());
                     }
 
+                    try {
+                        LevelChunkSection[] sections = chunk.getSections();
+                        int sectionIndex = chunk.getSectionIndex(targetBlock.getY());
+                        if (sectionIndex >= 0 && sectionIndex < sections.length) {
+                            LevelChunkSection section = sections[sectionIndex];
+                            if (section != null) {
+                                section.setBlockState(targetBlock.getX() & 15, targetBlock.getY() & 15, targetBlock.getZ() & 15, brokenState);
+                                chunk.setUnsaved(true);
+                            }
+                        }
+                    } catch (Throwable t) {
+                        SableMobBreaker.LOGGER.error("[SMB] section.setBlockState failed: {}", t.toString());
+                    }
+
                     BlockHealthManager.setHp(id, targetBlock.getX(), targetBlock.getY(), targetBlock.getZ(), 0);
 
+                    // 3. Синхронизация клиента
                     ClientboundBlockUpdatePacket packet = new ClientboundBlockUpdatePacket(targetBlock, brokenState);
                     for (ServerPlayer player : serverLevel.players()) {
                         if (player.distanceToSqr(worldBlockPos.getX(), worldBlockPos.getY(), worldBlockPos.getZ()) < 4096) {

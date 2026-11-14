@@ -14,7 +14,9 @@ public final class GoggleHelper {
     private GoggleHelper() {}
 
     public static boolean isWearingGoggles(Player player) {
-        if (GogglesItem.isWearingGoggles(player)) return true;
+        try {
+            if (GogglesItem.isWearingGoggles(player)) return true;
+        } catch (Throwable ignored) {}
 
         try {
             Class<?> curiosApi = Class.forName("top.theillusivec4.curios.api.CuriosApi");
