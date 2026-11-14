@@ -8,7 +8,8 @@
     "CompartmentTrackerMixin",
     "client.SableBlockUpdateMixin",
     "client.ClientLevelSetBlockMixin",
-    "LevelAabbMixin"
+    "LevelAabbMixin",
+    "client.ClientChunkLoadMixin"
   ],
   "client": [],
   "injectors": {
