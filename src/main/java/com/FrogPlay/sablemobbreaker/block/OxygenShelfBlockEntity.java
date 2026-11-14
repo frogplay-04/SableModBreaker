@@ -62,7 +62,11 @@ public class OxygenShelfBlockEntity extends BlockEntity {
     @Override
     protected void loadAdditional(CompoundTag tag, HolderLookup.Provider registries) {
         super.loadAdditional(tag, registries);
-        if (tag.contains("Energy")) energyStorage.deserializeNBT(registries, tag.get("Energy"));
-        if (tag.contains("Inventory")) itemHandler.deserializeNBT(registries, tag.getCompound("Inventory"));
+        if (tag.contains("Energy")) {
+            energyStorage.deserializeNBT(registries, tag.get("Energy"));
+        }
+        if (tag.contains("Inventory")) {
+            itemHandler.deserializeNBT(registries, tag.getCompound("Inventory"));
+        }
     }
 }
