@@ -4,7 +4,7 @@
     "item": "sablemobbreaker:hull"
   },
   "transitional_item": {
-    "item": "sablemobbreaker:hull"
+    "id": "sablemobbreaker:hull"
   },
   "sequence": [
     {
@@ -13,7 +13,7 @@
         { "item": "sablemobbreaker:hull" },
         { "item": "create:electron_tube" }
       ],
-      "results": [ { "item": "sablemobbreaker:hull" } ]
+      "results": [ { "id": "sablemobbreaker:hull" } ]
     },
     {
       "type": "create:deploying",
@@ -21,7 +21,7 @@
         { "item": "sablemobbreaker:hull" },
         { "item": "sablemobbreaker:control_panel" }
       ],
-      "results": [ { "item": "sablemobbreaker:hull" } ]
+      "results": [ { "id": "sablemobbreaker:hull" } ]
     },
     {
       "type": "create:deploying",
@@ -29,7 +29,7 @@
         { "item": "sablemobbreaker:hull" },
         { "item": "sablemobbreaker:large_welding_handle" }
       ],
-      "results": [ { "item": "sablemobbreaker:hull" } ]
+      "results": [ { "id": "sablemobbreaker:hull" } ]
     },
     {
       "type": "create:deploying",
@@ -37,7 +37,7 @@
         { "item": "sablemobbreaker:hull" },
         { "item": "sablemobbreaker:hull" }
       ],
-      "results": [ { "item": "sablemobbreaker:hull" } ]
+      "results": [ { "id": "sablemobbreaker:hull" } ]
     },
     {
       "type": "create:deploying",
@@ -45,7 +45,7 @@
         { "item": "sablemobbreaker:hull" },
         { "item": "sablemobbreaker:nozzle" }
       ],
-      "results": [ { "item": "sablemobbreaker:hull" } ]
+      "results": [ { "id": "sablemobbreaker:hull" } ]
     },
     {
       "type": "create:deploying",
@@ -53,14 +53,13 @@
         { "item": "sablemobbreaker:hull" },
         { "item": "sablemobbreaker:welding_handle" }
       ],
-      "results": [ { "item": "sablemobbreaker:hull" } ]
+      "results": [ { "id": "sablemobbreaker:hull" } ]
     }
   ],
   "results": [
     {
       "chance": 1.0,
-      "item": "sablemobbreaker:welding_torch"
+      "id": "sablemobbreaker:welding_torch"
     }
-  ],
-  "loops": 1
+  ]
 }

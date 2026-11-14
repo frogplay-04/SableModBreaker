@@ -4,105 +4,109 @@
     "item": "sablemobbreaker:hull"
   },
   "transitional_item": {
-    "item": "sablemobbreaker:hull"
+    "id": "sablemobbreaker:hull"
   },
   "sequence": [
     {
       "type": "create:deploying",
       "ingredients": [ { "item": "sablemobbreaker:hull" }, { "item": "sablemobbreaker:electrode" } ],
-      "results": [ { "item": "sablemobbreaker:hull" } ]
+      "results": [ { "id": "sablemobbreaker:hull" } ]
     },
     {
       "type": "create:deploying",
       "ingredients": [ { "item": "sablemobbreaker:hull" }, { "item": "sablemobbreaker:large_plasma_handle" } ],
-      "results": [ { "item": "sablemobbreaker:hull" } ]
+      "results": [ { "id": "sablemobbreaker:hull" } ]
     },
     {
       "type": "create:deploying",
       "ingredients": [ { "item": "sablemobbreaker:hull" }, { "item": "sablemobbreaker:flow_meter" } ],
-      "results": [ { "item": "sablemobbreaker:hull" } ]
+      "results": [ { "id": "sablemobbreaker:hull" } ]
     },
     {
       "type": "create:deploying",
       "ingredients": [ { "item": "sablemobbreaker:hull" }, { "item": "sablemobbreaker:hull" } ],
-      "results": [ { "item": "sablemobbreaker:hull" } ]
+      "results": [ { "id": "sablemobbreaker:hull" } ]
     },
     {
       "type": "create:deploying",
       "ingredients": [ { "item": "sablemobbreaker:hull" }, { "item": "sablemobbreaker:display_screen" } ],
-      "results": [ { "item": "sablemobbreaker:hull" } ]
+      "results": [ { "id": "sablemobbreaker:hull" } ]
     },
     {
       "type": "create:deploying",
       "ingredients": [ { "item": "sablemobbreaker:hull" }, { "item": "sablemobbreaker:plasma_handle" } ],
-      "results": [ { "item": "sablemobbreaker:hull" } ]
+      "results": [ { "id": "sablemobbreaker:hull" } ]
     },
     {
       "type": "create:deploying",
       "ingredients": [ { "item": "sablemobbreaker:hull" }, { "item": "sablemobbreaker:electrode" } ],
-      "results": [ { "item": "sablemobbreaker:hull" } ]
+      "results": [ { "id": "sablemobbreaker:hull" } ]
     },
     {
       "type": "create:deploying",
       "ingredients": [ { "item": "sablemobbreaker:hull" }, { "item": "sablemobbreaker:wire" } ],
-      "results": [ { "item": "sablemobbreaker:hull" } ]
+      "results": [ { "id": "sablemobbreaker:hull" } ]
     },
     {
       "type": "create:deploying",
       "ingredients": [ { "item": "sablemobbreaker:hull" }, { "item": "sablemobbreaker:wire" } ],
-      "results": [ { "item": "sablemobbreaker:hull" } ]
+      "results": [ { "id": "sablemobbreaker:hull" } ]
     },
     {
       "type": "create:deploying",
       "ingredients": [ { "item": "sablemobbreaker:hull" }, { "item": "sablemobbreaker:wire" } ],
-      "results": [ { "item": "sablemobbreaker:hull" } ]
+      "results": [ { "id": "sablemobbreaker:hull" } ]
     },
     {
       "type": "create:deploying",
       "ingredients": [ { "item": "sablemobbreaker:hull" }, { "item": "sablemobbreaker:wire" } ],
-      "results": [ { "item": "sablemobbreaker:hull" } ]
+      "results": [ { "id": "sablemobbreaker:hull" } ]
     },
     {
       "type": "create:deploying",
       "ingredients": [ { "item": "sablemobbreaker:hull" }, { "item": "sablemobbreaker:wire" } ],
-      "results": [ { "item": "sablemobbreaker:hull" } ]
+      "results": [ { "id": "sablemobbreaker:hull" } ]
     },
     {
       "type": "create:deploying",
       "ingredients": [ { "item": "sablemobbreaker:hull" }, { "item": "sablemobbreaker:wire" } ],
-      "results": [ { "item": "sablemobbreaker:hull" } ]
+      "results": [ { "id": "sablemobbreaker:hull" } ]
     },
     {
       "type": "create:deploying",
       "ingredients": [ { "item": "sablemobbreaker:hull" }, { "item": "sablemobbreaker:wire" } ],
-      "results": [ { "item": "sablemobbreaker:hull" } ]
+      "results": [ { "id": "sablemobbreaker:hull" } ]
     },
     {
       "type": "create:deploying",
       "ingredients": [ { "item": "sablemobbreaker:hull" }, { "item": "sablemobbreaker:wire" } ],
-      "results": [ { "item": "sablemobbreaker:hull" } ]
+      "results": [ { "id": "sablemobbreaker:hull" } ]
     },
     {
       "type": "create:deploying",
       "ingredients": [ { "item": "sablemobbreaker:hull" }, { "item": "sablemobbreaker:wire" } ],
-      "results": [ { "item": "sablemobbreaker:hull" } ]
+      "results": [ { "id": "sablemobbreaker:hull" } ]
     },
     {
       "type": "create:deploying",
       "ingredients": [ { "item": "sablemobbreaker:hull" }, { "item": "sablemobbreaker:wire" } ],
-      "results": [ { "item": "sablemobbreaker:hull" } ]
+      "results": [ { "id": "sablemobbreaker:hull" } ]
     },
     {
       "type": "create:deploying",
       "ingredients": [ { "item": "sablemobbreaker:hull" }, { "item": "sablemobbreaker:wire" } ],
-      "results": [ { "item": "sablemobbreaker:hull" } ]
+      "results": [ { "id": "sablemobbreaker:hull" } ]
+    },
+    {
+      "type": "create:deploying",
+      "ingredients": [ { "item": "sablemobbreaker:hull" }, { "item": "sablemobbreaker:wire" } ],
+      "results": [ { "id": "sablemobbreaker:hull" } ]
     }
   ],
   "results": [
     {
       "chance": 1.0,
-      "item": "sablemobbreaker:plasma_cutter"
+      "id": "sablemobbreaker:plasma_cutter"
     }
-  ],
-  "loops": 1
+  ]
 }
