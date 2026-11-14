@@ -61,46 +61,6 @@
       "type": "create:deploying",
       "ingredients": [ { "item": "sablemobbreaker:hull" }, { "item": "sablemobbreaker:wire" } ],
       "results": [ { "id": "sablemobbreaker:hull" } ]
-    },
-    {
-      "type": "create:deploying",
-      "ingredients": [ { "item": "sablemobbreaker:hull" }, { "item": "sablemobbreaker:wire" } ],
-      "results": [ { "id": "sablemobbreaker:hull" } ]
-    },
-    {
-      "type": "create:deploying",
-      "ingredients": [ { "item": "sablemobbreaker:hull" }, { "item": "sablemobbreaker:wire" } ],
-      "results": [ { "id": "sablemobbreaker:hull" } ]
-    },
-    {
-      "type": "create:deploying",
-      "ingredients": [ { "item": "sablemobbreaker:hull" }, { "item": "sablemobbreaker:wire" } ],
-      "results": [ { "id": "sablemobbreaker:hull" } ]
-    },
-    {
-      "type": "create:deploying",
-      "ingredients": [ { "item": "sablemobbreaker:hull" }, { "item": "sablemobbreaker:wire" } ],
-      "results": [ { "id": "sablemobbreaker:hull" } ]
-    },
-    {
-      "type": "create:deploying",
-      "ingredients": [ { "item": "sablemobbreaker:hull" }, { "item": "sablemobbreaker:wire" } ],
-      "results": [ { "id": "sablemobbreaker:hull" } ]
-    },
-    {
-      "type": "create:deploying",
-      "ingredients": [ { "item": "sablemobbreaker:hull" }, { "item": "sablemobbreaker:wire" } ],
-      "results": [ { "id": "sablemobbreaker:hull" } ]
-    },
-    {
-      "type": "create:deploying",
-      "ingredients": [ { "item": "sablemobbreaker:hull" }, { "item": "sablemobbreaker:wire" } ],
-      "results": [ { "id": "sablemobbreaker:hull" } ]
-    },
-    {
-      "type": "create:deploying",
-      "ingredients": [ { "item": "sablemobbreaker:hull" }, { "item": "sablemobbreaker:wire" } ],
-      "results": [ { "id": "sablemobbreaker:hull" } ]
     }
   ],
   "results": [

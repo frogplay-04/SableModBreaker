@@ -10,32 +10,21 @@ import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.chunk.LevelChunk;
 import net.minecraft.world.phys.Vec3;
 
-import java.util.HashMap;
-import java.util.Map;
 import java.util.UUID;
 
 public final class SableMobBreakerClient {
 
-    private static final Map<UUID, SubLevel> CACHE = new HashMap<>();
-    private static long lastCacheRefresh = 0;
-
     private SableMobBreakerClient() {}
 
     private static SubLevel findSubLevel(Level level, UUID id) {
-        long now = System.currentTimeMillis();
-        if (now - lastCacheRefresh > 2000 || CACHE.isEmpty()) {
-            CACHE.clear();
-            SubLevelContainer container = SubLevelContainer.getContainer(level);
-            if (container != null) {
-                for (SubLevel sl : container.getAllSubLevels()) {
-                    if (sl.isRemoved()) continue;
-                    UUID uid = sl.getUniqueId();
-                    if (uid != null) CACHE.put(uid, sl);
-                }
+        SubLevelContainer container = SubLevelContainer.getContainer(level);
+        if (container == null) return null;
+        for (SubLevel sl : container.getAllSubLevels()) {
+            if (!sl.isRemoved() && id.equals(sl.getUniqueId())) {
+                return sl;
             }
-            lastCacheRefresh = now;
         }
-        return CACHE.get(id);
+        return null;
     }
 
     public static Vec3 getBlockWorldPos(UUID subLevelId, int x, int y, int z) {

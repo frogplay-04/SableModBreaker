@@ -6,6 +6,7 @@ import com.FrogPlay.sablemobbreaker.network.SetTorchStatePacket;
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.blaze3d.vertex.VertexConsumer;
 import dev.ryanhcode.sable.api.sublevel.SubLevelContainer;
+import dev.ryanhcode.sable.sublevel.ClientSubLevel;
 import dev.ryanhcode.sable.sublevel.SubLevel;
 import net.minecraft.client.Camera;
 import net.minecraft.client.Minecraft;
@@ -58,11 +59,11 @@ public class ClientEvents {
 
     private static final List<Label> LABELS = new ArrayList<>();
     private static int tickCounter = RESCAN_INTERVAL;
-
+    private static int sableRefreshTicker = 40;
     private static boolean wasAttackDown = false;
 
     public static void markDirty() {
-        tickCounter = RESCAN_INTERVAL;
+        tickCounter = 0;
     }
 
     @SubscribeEvent
@@ -86,9 +87,15 @@ public class ClientEvents {
             wasAttackDown = isAttackDown;
         }
 
-        if (--tickCounter > 0) return;
-        tickCounter = RESCAN_INTERVAL;
-        rescan(player);
+        if (--tickCounter <= 0) {
+            tickCounter = RESCAN_INTERVAL;
+            rescan(player);
+        }
+
+        if (--sableRefreshTicker <= 0) {
+            sableRefreshTicker = 40; // Каждые 2 секунды
+            forceSableRenderUpdate();
+        }
     }
 
     @SubscribeEvent
@@ -132,7 +139,7 @@ public class ClientEvents {
                     String name = method.getName();
                     if ((name.equals("orientation") || name.equals("rotation") || name.equals("quaternion"))
                             && method.getParameterCount() == 0) {
-                        Object result = method.invoke(pose, new Object[0]);
+                        Object result = method.invoke(pose);
                         if (result instanceof Quaternionf q) {
                             poseStack.mulPose(q);
                             break;
@@ -203,6 +210,7 @@ public class ClientEvents {
         Minecraft mc = Minecraft.getInstance();
         Player player = mc.player;
         if (player == null) return;
+        if (mc.screen != null) return;
         if (!GoggleHelper.isWearingGoggles(player)) return;
         if (LABELS.isEmpty()) return;
 
@@ -270,24 +278,10 @@ public class ClientEvents {
         Minecraft mc = Minecraft.getInstance();
         if (mc.level == null) return;
 
-        SubLevelContainer container = SubLevelContainer.getContainer(mc.level);
-        if (container == null) return;
-
-        HashSet<UUID> activeIds = new HashSet<>();
-        for (var sl : container.getAllSubLevels()) {
-            if (sl.isRemoved()) continue;
-            UUID id = sl.getUniqueId();
-            if (id != null) activeIds.add(id);
-        }
-
         var stale = new ArrayList<BlockHealthClientData.Key>();
         for (var key : BlockHealthClientData.getAll().keySet()) {
-            if (!activeIds.contains(key.subLevelId())) {
-                stale.add(key);
-                continue;
-            }
             BlockState state = SableMobBreakerClient.getBlockStateAt(key.subLevelId(), key.x(), key.y(), key.z());
-            if (state == null || state.isAir()) {
+            if (state != null && state.isAir()) {
                 stale.add(key);
             }
         }
@@ -308,6 +302,33 @@ public class ClientEvents {
             if (dSq > radiusSq) continue;
 
             LABELS.add(new Label(wp.x, wp.y + 0.5, wp.z, entry.hp(), entry.maxHp(), dSq));
+        }
+    }
+
+    private static void forceSableRenderUpdate() {
+        Minecraft mc = Minecraft.getInstance();
+        if (mc.level == null) return;
+        SubLevelContainer container = SubLevelContainer.getContainer(mc.level);
+        if (container == null) return;
+
+        for (SubLevel sl : container.getAllSubLevels()) {
+            if (sl instanceof ClientSubLevel clientSubLevel) {
+                var box = sl.boundingBox();
+                int minX = (int) Math.floor(box.minX()) >> 4;
+                int maxX = (int) Math.floor(box.maxX()) >> 4;
+                int minY = (int) Math.floor(box.minY()) >> 4;
+                int maxY = (int) Math.floor(box.maxY()) >> 4;
+                int minZ = (int) Math.floor(box.minZ()) >> 4;
+                int maxZ = (int) Math.floor(box.maxZ()) >> 4;
+
+                for (int x = minX; x <= maxX; x++) {
+                    for (int y = minY; y <= maxY; y++) {
+                        for (int z = minZ; z <= maxZ; z++) {
+                            clientSubLevel.getRenderData().setDirty(x, y, z, true);
+                        }
+                    }
+                }
+            }
         }
     }
 
