@@ -1,0 +1,15 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "misc",
+  "pattern": [
+    "IOI",
+    "IGI",
+    " I "
+  ],
+  "key": {
+    "I": { "item": "create:iron_sheet" },
+    "O": { "item": "minecraft:orange_dye" },
+    "G": { "item": "minecraft:iron_ingot" }
+  },
+  "result": { "id": "sablemobbreaker:fuel_tank", "count": 1 }
+}
