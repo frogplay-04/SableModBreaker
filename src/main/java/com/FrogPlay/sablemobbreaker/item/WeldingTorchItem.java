@@ -66,23 +66,23 @@ public class WeldingTorchItem extends Item {
         ItemStack bottle = getBottle(stack);
 
         if (isOn(stack)) {
-            tooltip.add(Component.literal("Состояние: ВКЛ").withStyle(ChatFormatting.GREEN));
+            tooltip.add(Component.translatable("tooltip.sablemobbreaker.welding_torch.state.on").withStyle(ChatFormatting.GREEN));
         } else {
-            tooltip.add(Component.literal("Состояние: ВЫКЛ").withStyle(ChatFormatting.DARK_GRAY));
+            tooltip.add(Component.translatable("tooltip.sablemobbreaker.welding_torch.state.off").withStyle(ChatFormatting.DARK_GRAY));
         }
 
         if (bottle.isEmpty()) {
-            tooltip.add(Component.literal("Баллон: пусто").withStyle(ChatFormatting.DARK_GRAY));
+            tooltip.add(Component.translatable("tooltip.sablemobbreaker.welding_torch.bottle.empty").withStyle(ChatFormatting.DARK_GRAY));
         } else {
-            tooltip.add(Component.literal("Баллон: ")
+            tooltip.add(Component.translatable("tooltip.sablemobbreaker.welding_torch.bottle.prefix")
                     .append(bottle.getHoverName().copy().withStyle(ChatFormatting.YELLOW))
                     .withStyle(ChatFormatting.GRAY));
 
             if (WeldingTorchHandler.isOxygenBottle(bottle)) {
-                tooltip.add(Component.literal("⚠ ОПАСНО! Кислород взорвётся").withStyle(ChatFormatting.RED));
+                tooltip.add(Component.translatable("tooltip.sablemobbreaker.welding_torch.danger.oxygen").withStyle(ChatFormatting.RED));
             } else {
                 int fuel = WeldingTorchHandler.getFuelAmount(bottle);
-                tooltip.add(Component.literal("Топливо: " + fuel + " / 2000")
+                tooltip.add(Component.translatable("tooltip.sablemobbreaker.welding_torch.fuel", fuel, 2000)
                         .withStyle(fuel > 0 ? ChatFormatting.AQUA : ChatFormatting.DARK_GRAY));
                 if (fuel > 0) {
                     tooltip.add(Component.literal(String.format("(%.0f%%)", (fuel * 100.0f) / 2000))

@@ -18,5 +18,12 @@
   "block.sablemobbreaker.oxygen_shelf": "Oxygen Tank Shelf",
   "container.sablemobbreaker.plasma_cutter": "Plasma Cutter",
   "tooltip.sablemobbreaker.oxygen_tank.air": "Air: %s / %s",
-  "tooltip.sablemobbreaker.fuel_tank.fuel": "Fuel: %s / %s"
+  "tooltip.sablemobbreaker.fuel_tank.fuel": "Fuel: %s / %s",
+  "tooltip.sablemobbreaker.welding_torch.state.on": "State: ON",
+  "tooltip.sablemobbreaker.welding_torch.state.off": "State: OFF",
+  "tooltip.sablemobbreaker.welding_torch.bottle.empty": "Bottle: Empty",
+  "tooltip.sablemobbreaker.welding_torch.bottle.prefix": "Bottle: ",
+  "tooltip.sablemobbreaker.welding_torch.danger.oxygen": "⚠ DANGER! Oxygen will explode",
+  "tooltip.sablemobbreaker.welding_torch.danger.fuel": "⚠ DANGER! Fuel will explode",
+  "tooltip.sablemobbreaker.welding_torch.fuel": "Fuel: %s / %s"
 }

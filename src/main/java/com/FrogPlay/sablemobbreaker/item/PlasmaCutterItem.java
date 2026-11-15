@@ -1,6 +1,8 @@
 package com.FrogPlay.sablemobbreaker.item;
 
+import com.FrogPlay.sablemobbreaker.event.WeldingTorchHandler;
 import com.FrogPlay.sablemobbreaker.menu.PlasmaCutterMenu;
+import net.minecraft.ChatFormatting;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.NbtOps;
@@ -14,8 +16,11 @@ import net.minecraft.world.SimpleMenuProvider;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.TooltipFlag;
 import net.minecraft.world.item.component.CustomData;
 import net.minecraft.world.level.Level;
+
+import java.util.List;
 
 public class PlasmaCutterItem extends Item {
 
@@ -35,6 +40,35 @@ public class PlasmaCutterItem extends Item {
             }
         }
         return InteractionResultHolder.sidedSuccess(stack, level.isClientSide);
+    }
+
+    @Override
+    public void appendHoverText(ItemStack stack, TooltipContext context, List<Component> tooltip, TooltipFlag flag) {
+        ItemStack bottle = getBottle(stack);
+
+        if (isOn(stack)) {
+            tooltip.add(Component.translatable("tooltip.sablemobbreaker.welding_torch.state.on").withStyle(ChatFormatting.AQUA));
+        } else {
+            tooltip.add(Component.translatable("tooltip.sablemobbreaker.welding_torch.state.off").withStyle(ChatFormatting.DARK_GRAY));
+        }
+
+        if (bottle.isEmpty()) {
+            tooltip.add(Component.translatable("tooltip.sablemobbreaker.welding_torch.bottle.empty").withStyle(ChatFormatting.DARK_GRAY));
+        } else {
+            tooltip.add(Component.translatable("tooltip.sablemobbreaker.welding_torch.bottle.prefix")
+                    .append(bottle.getHoverName().copy().withStyle(ChatFormatting.YELLOW))
+                    .withStyle(ChatFormatting.GRAY));
+
+            if (bottle.getItem() instanceof OxygenTankItem) {
+                int air = OxygenTankItem.getAir(bottle);
+                tooltip.add(Component.translatable("tooltip.sablemobbreaker.oxygen_tank.air", air, OxygenTankItem.MAX_AIR)
+                        .withStyle(air > 0 ? ChatFormatting.AQUA : ChatFormatting.DARK_GRAY));
+            } else if (WeldingTorchHandler.getFuelAmount(bottle) > 0) {
+                tooltip.add(Component.translatable("tooltip.sablemobbreaker.welding_torch.danger.fuel").withStyle(ChatFormatting.RED));
+            }
+        }
+
+        super.appendHoverText(stack, context, tooltip, flag);
     }
 
     public static ItemStack getBottle(ItemStack cutter) {

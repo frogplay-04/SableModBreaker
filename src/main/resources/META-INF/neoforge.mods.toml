@@ -8,6 +8,10 @@ version="${mod_version}"
 displayName="${mod_name}"
 authors="FrogPlay"
 description="A mod that makes hostile mobs attack Sable sub-levels."
+logoFile="icon.png"
+displayURL="https://github.com/frogplay-04/SableModBreaker"
+issueTrackerURL="https://github.com/frogplay-04/SableModBreaker/issues"
 
 [[mixins]]
 config = "sablemobbreaker.mixins.json"
+

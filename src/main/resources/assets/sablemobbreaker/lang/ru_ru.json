@@ -18,5 +18,12 @@
   "block.sablemobbreaker.oxygen_shelf": "Полка с кислородными баллонами",
 "container.sablemobbreaker.plasma_cutter": "Плазменный резак",
   "tooltip.sablemobbreaker.oxygen_tank.air": "Воздух: %s / %s",
-  "tooltip.sablemobbreaker.fuel_tank.fuel": "Топливо: %s / %s"
+  "tooltip.sablemobbreaker.fuel_tank.fuel": "Топливо: %s / %s",
+  "tooltip.sablemobbreaker.welding_torch.state.on": "Состояние: ВКЛ",
+  "tooltip.sablemobbreaker.welding_torch.state.off": "Состояние: ВЫКЛ",
+  "tooltip.sablemobbreaker.welding_torch.bottle.empty": "Баллон: пусто",
+  "tooltip.sablemobbreaker.welding_torch.bottle.prefix": "Баллон: ",
+  "tooltip.sablemobbreaker.welding_torch.danger.oxygen": "⚠ ОПАСНО! Кислород взорвётся",
+  "tooltip.sablemobbreaker.welding_torch.danger.fuel": "⚠ ОПАСНО! Топливо взорвётся",
+  "tooltip.sablemobbreaker.welding_torch.fuel": "Топливо: %s / %s"
 }
