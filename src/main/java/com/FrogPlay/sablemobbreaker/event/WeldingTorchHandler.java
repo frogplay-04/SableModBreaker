@@ -76,18 +76,9 @@ public class WeldingTorchHandler {
     }
 
     @SubscribeEvent
-    public static void registerCapabilities(RegisterCapabilitiesEvent event) {
-        event.registerItem(Capabilities.ItemHandler.ITEM,
-                (stack, ctx) -> new WeldingTorchInventory(stack),
-                SableMobBreaker.WELDING_TORCH.get());
-        event.registerItem(Capabilities.FluidHandler.ITEM,
-                (stack, ctx) -> new FuelTankFluidHandler(stack),
-                SableMobBreaker.FUEL_TANK.get());
-    }
-
-    @SubscribeEvent
     public static void onAttackEntity(AttackEntityEvent event) {
-        if (event.getEntity().getMainHandItem().getItem() instanceof WeldingTorchItem) {
+        if (event.getEntity().getMainHandItem().getItem() instanceof WeldingTorchItem ||
+                event.getEntity().getMainHandItem().getItem() instanceof PlasmaCutterItem) {
             event.setCanceled(true);
         }
     }
@@ -97,6 +88,7 @@ public class WeldingTorchHandler {
         Player player = event.getEntity();
         if (player.level().isClientSide()) return;
 
+        // Взрыв при взрыве баллона в руке (таймер)
         for (int i = 0; i < player.getInventory().getContainerSize(); i++) {
             ItemStack stack = player.getInventory().getItem(i);
             if (stack.getItem() instanceof WeldingTorchItem || stack.getItem() instanceof PlasmaCutterItem) {
@@ -122,7 +114,7 @@ public class WeldingTorchHandler {
         ItemStack mainHand = player.getMainHandItem();
         Level level = player.level();
 
-        // ЛОГИКА СВАРОЧНОГО АППАРАТА
+        // === ЛОГИКА СВАРОЧНОГО АППАРАТА ===
         if (mainHand.getItem() instanceof WeldingTorchItem && WeldingTorchItem.isOn(mainHand)) {
             ItemStack bottle = WeldingTorchItem.getBottle(mainHand);
             int fuel = getFuelAmount(bottle);
@@ -153,6 +145,11 @@ public class WeldingTorchHandler {
                 for (LivingEntity mob : entities) {
                     mob.igniteForSeconds(2);
                     mob.hurt(player.damageSources().playerAttack(player), 1.0f);
+                    if (level instanceof ServerLevel serverLevel) {
+                        serverLevel.sendParticles(ParticleTypes.FLAME,
+                                mob.getX(), mob.getY() + 1, mob.getZ(),
+                                5, 0.2, 0.2, 0.2, 0.05);
+                    }
                 }
             }
 
@@ -200,11 +197,9 @@ public class WeldingTorchHandler {
             }
         }
 
-        // ЛОГИКА ПЛАЗМЕННОГО РЕЗАКА
-        if (mainHand.getItem() instanceof PlasmaCutterItem && WeldingTorchItem.isOn(mainHand)) {
-            ItemStack bottle = WeldingTorchItem.getBottle(mainHand);
+        if (mainHand.getItem() instanceof PlasmaCutterItem && PlasmaCutterItem.isOn(mainHand)) {
+            ItemStack bottle = PlasmaCutterItem.getBottle(mainHand);
 
-            // Проверка на топливо (взрыв)
             if (getFuelAmount(bottle) > 0) {
                 level.explode(null, player.getX(), player.getY() + 0.5, player.getZ(), 3.0f, Level.ExplosionInteraction.BLOCK);
                 mainHand.shrink(1);
@@ -212,45 +207,39 @@ public class WeldingTorchHandler {
                 return;
             }
 
-            // Проверка кислорода
+
             int air = 0;
             if (bottle.getItem() instanceof OxygenTankItem) {
                 air = OxygenTankItem.getAir(bottle);
             }
             if (air <= 0) {
-                WeldingTorchItem.setOn(mainHand, false);
-                level.playSound(null, player.getX(), player.getY(), player.getZ(),
-                        SoundEvents.FIRE_EXTINGUISH, SoundSource.PLAYERS, 0.5f, 1.0f);
+                PlasmaCutterItem.setOn(mainHand, false);
+                level.playSound(null, player.getX(), player.getY(), player.getZ(), SoundEvents.FIRE_EXTINGUISH, SoundSource.PLAYERS, 0.5f, 1.0f);
                 return;
             }
 
-            // Частицы (синее пламя)
             if (player.tickCount % 2 == 0 && level instanceof ServerLevel serverLevel) {
                 Vec3 look = player.getLookAngle();
                 Vec3 start = player.getEyePosition().add(look.scale(1.2));
                 if (player instanceof ServerPlayer serverPlayer) {
-                    serverLevel.sendParticles(serverPlayer, ParticleTypes.SOUL_FIRE_FLAME, true,
-                            start.x, start.y, start.z, 3, 0.05, 0.05, 0.05, 0.01);
+                    serverLevel.sendParticles(serverPlayer, ParticleTypes.SOUL_FIRE_FLAME, true, start.x, start.y, start.z, 3, 0.05, 0.05, 0.05, 0.01);
                 }
             }
 
-            // Ломание блока (раз в 10 тиков)
             if (player.tickCount % 10 == 0) {
                 Vec3 eyePos = player.getEyePosition();
                 Vec3 lookVec = player.getLookAngle();
-                Vec3 hitPos = eyePos.add(lookVec.scale(4.0)); // Бьем в 4 блоках от глаз (макс радиус 5)
+                Vec3 hitPos = eyePos.add(lookVec.scale(4.0));
 
                 SubLevelContainer container = SubLevelContainer.getContainer(level);
                 if (container != null) {
                     for (SubLevel sl : container.getAllSubLevels()) {
                         if (sl.isRemoved()) continue;
-                        // Проверяем, что мы смотрим на постройку
                         if (sl.boundingBox().contains(hitPos.x, hitPos.y, hitPos.z)) {
                             if (SubLevelDamageHelper.damageBlockExact(level, sl, hitPos, 9999)) {
                                 OxygenTankItem.setAir(bottle, air - 10);
-                                WeldingTorchItem.setBottle(mainHand, bottle);
-                                level.playSound(null, player.getX(), player.getY(), player.getZ(),
-                                        SoundEvents.FIRE_AMBIENT, SoundSource.PLAYERS, 0.5f, 2.0f);
+                                PlasmaCutterItem.setBottle(mainHand, bottle);
+                                level.playSound(null, player.getX(), player.getY(), player.getZ(), SoundEvents.FIRE_AMBIENT, SoundSource.PLAYERS, 0.5f, 2.0f);
                                 break;
                             }
                         }

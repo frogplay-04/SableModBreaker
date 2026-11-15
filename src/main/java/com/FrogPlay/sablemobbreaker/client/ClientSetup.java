@@ -14,6 +14,7 @@ public class ClientSetup {
     @SubscribeEvent
     public static void registerScreens(RegisterMenuScreensEvent event) {
         event.register(SableMobBreaker.WELDING_TORCH_MENU.get(), WeldingTorchScreen::new);
+        event.register(SableMobBreaker.PLASMA_CUTTER_MENU.get(), PlasmaCutterScreen::new);
     }
 
     @SubscribeEvent
