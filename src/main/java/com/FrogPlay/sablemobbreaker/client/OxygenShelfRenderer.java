@@ -50,9 +50,7 @@ public class OxygenShelfRenderer implements BlockEntityRenderer<OxygenShelfBlock
     @Override
     public AABB getRenderBoundingBox(OxygenShelfBlockEntity blockEntity) {
         var pos = blockEntity.getBlockPos();
-        return new AABB(
-                pos.getX() - 1.0, pos.getY() - 1.0, pos.getZ() - 1.0,
-                pos.getX() + 2.0, pos.getY() + 2.0, pos.getZ() + 2.0
-        );
+        return new AABB(pos.getX() - 1, pos.getY(), pos.getZ() - 1,
+                pos.getX() + 2, pos.getY() + 2, pos.getZ() + 2);
     }
 }

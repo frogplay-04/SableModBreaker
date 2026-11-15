@@ -7,6 +7,7 @@ import dev.ryanhcode.sable.sublevel.SubLevel;
 import net.minecraft.util.Mth;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.Mob;
+import net.minecraft.world.entity.ai.attributes.Attributes;
 import net.minecraft.world.entity.ai.goal.Goal;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
@@ -108,7 +109,8 @@ public class MeleeAttackSubLevelGoal extends Goal {
                     }
                 }
 
-                SubLevelDamageHelper.damageBlock(this.mob.level(), target, hitPos, 5);
+                float damage = (float) this.mob.getAttributeValue(Attributes.ATTACK_DAMAGE);
+                SubLevelDamageHelper.damageBlock(this.mob.level(), target, hitPos, Math.round(damage));
 
                 this.mob.swing(InteractionHand.MAIN_HAND);
                 this.mob.level().playSound(null, this.mob.getX(), this.mob.getY(), this.mob.getZ(),

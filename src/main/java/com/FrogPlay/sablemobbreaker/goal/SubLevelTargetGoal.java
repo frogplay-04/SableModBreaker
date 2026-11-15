@@ -34,7 +34,12 @@ public class SubLevelTargetGoal extends Goal implements SubLevelTarget {
 
     @Override
     public boolean canContinueToUse() {
-        return this.targetSubLevel != null && !this.targetSubLevel.isRemoved() && !SubLevelDamageHelper.isRagdoll(this.targetSubLevel);
+        if (this.targetSubLevel == null || this.targetSubLevel.isRemoved()) return false;
+        if (SubLevelDamageHelper.isRagdoll(this.targetSubLevel)) return false;
+
+        // Проверка: если цель вышла за радиус поиска — забываем о ней
+        double distSq = getDistanceSqToSubLevel(this.targetSubLevel);
+        return distSq <= this.searchRadius * this.searchRadius;
     }
 
     @Override
@@ -60,17 +65,22 @@ public class SubLevelTargetGoal extends Goal implements SubLevelTarget {
             if (subLevel.isRemoved()) continue;
             if (SubLevelDamageHelper.isRagdoll(subLevel)) continue;
 
-            BoundingBox3dc box = subLevel.boundingBox();
-            double dx = Math.max(0, Math.max(box.minX() - mobPos.x, mobPos.x - box.maxX()));
-            double dy = Math.max(0, Math.max(box.minY() - mobPos.y, mobPos.y - box.maxY()));
-            double dz = Math.max(0, Math.max(box.minZ() - mobPos.z, mobPos.z - box.maxZ()));
-            double distSq = dx * dx + dy * dy + dz * dz;
-
+            double distSq = getDistanceSqToSubLevel(subLevel);
             if (distSq < nearestDistSq) {
                 nearestDistSq = distSq;
                 nearest = subLevel;
             }
         }
         return nearest;
+    }
+
+    private double getDistanceSqToSubLevel(SubLevel subLevel) {
+        BoundingBox3dc box = subLevel.boundingBox();
+        Vec3 mobPos = this.mob.position();
+
+        double dx = Math.max(0, Math.max(box.minX() - mobPos.x, mobPos.x - box.maxX()));
+        double dy = Math.max(0, Math.max(box.minY() - mobPos.y, mobPos.y - box.maxY()));
+        double dz = Math.max(0, Math.max(box.minZ() - mobPos.z, mobPos.z - box.maxZ()));
+        return dx * dx + dy * dy + dz * dz;
     }
 }

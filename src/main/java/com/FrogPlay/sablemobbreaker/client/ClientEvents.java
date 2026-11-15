@@ -1,12 +1,12 @@
 package com.FrogPlay.sablemobbreaker.client;
 
 import com.FrogPlay.sablemobbreaker.SableMobBreaker;
+import com.FrogPlay.sablemobbreaker.item.PlasmaCutterItem;
 import com.FrogPlay.sablemobbreaker.item.WeldingTorchItem;
 import com.FrogPlay.sablemobbreaker.network.SetTorchStatePacket;
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.blaze3d.vertex.VertexConsumer;
 import dev.ryanhcode.sable.api.sublevel.SubLevelContainer;
-import dev.ryanhcode.sable.sublevel.ClientSubLevel;
 import dev.ryanhcode.sable.sublevel.SubLevel;
 import net.minecraft.client.Camera;
 import net.minecraft.client.Minecraft;
@@ -34,7 +34,6 @@ import org.joml.Vector3d;
 import org.joml.Vector4f;
 
 import java.util.ArrayList;
-import java.util.HashSet;
 import java.util.List;
 import java.util.UUID;
 
@@ -59,7 +58,6 @@ public class ClientEvents {
 
     private static final List<Label> LABELS = new ArrayList<>();
     private static int tickCounter = RESCAN_INTERVAL;
-    private static int sableRefreshTicker = 40;
     private static boolean wasAttackDown = false;
 
     public static void markDirty() {
@@ -76,10 +74,11 @@ public class ClientEvents {
         }
 
         boolean isAttackDown = mc.options.keyAttack.isDown();
-        boolean isHoldingTorch = player.getMainHandItem().getItem() instanceof WeldingTorchItem;
+        boolean isHoldingTool = player.getMainHandItem().getItem() instanceof WeldingTorchItem
+                || player.getMainHandItem().getItem() instanceof PlasmaCutterItem;
 
         if (isAttackDown != wasAttackDown) {
-            if (isHoldingTorch) {
+            if (isHoldingTool) {
                 PacketDistributor.sendToServer(new SetTorchStatePacket(isAttackDown));
             } else if (wasAttackDown) {
                 PacketDistributor.sendToServer(new SetTorchStatePacket(false));
@@ -90,11 +89,6 @@ public class ClientEvents {
         if (--tickCounter <= 0) {
             tickCounter = RESCAN_INTERVAL;
             rescan(player);
-        }
-
-        if (--sableRefreshTicker <= 0) {
-            sableRefreshTicker = 40; // Каждые 2 секунды
-            forceSableRenderUpdate();
         }
     }
 
@@ -305,39 +299,15 @@ public class ClientEvents {
         }
     }
 
-    private static void forceSableRenderUpdate() {
-        Minecraft mc = Minecraft.getInstance();
-        if (mc.level == null) return;
-        SubLevelContainer container = SubLevelContainer.getContainer(mc.level);
-        if (container == null) return;
-
-        for (SubLevel sl : container.getAllSubLevels()) {
-            if (sl instanceof ClientSubLevel clientSubLevel) {
-                var box = sl.boundingBox();
-                int minX = (int) Math.floor(box.minX()) >> 4;
-                int maxX = (int) Math.floor(box.maxX()) >> 4;
-                int minY = (int) Math.floor(box.minY()) >> 4;
-                int maxY = (int) Math.floor(box.maxY()) >> 4;
-                int minZ = (int) Math.floor(box.minZ()) >> 4;
-                int maxZ = (int) Math.floor(box.maxZ()) >> 4;
-
-                for (int x = minX; x <= maxX; x++) {
-                    for (int y = minY; y <= maxY; y++) {
-                        for (int z = minZ; z <= maxZ; z++) {
-                            clientSubLevel.getRenderData().setDirty(x, y, z, true);
-                        }
-                    }
-                }
-            }
-        }
-    }
-
     @SubscribeEvent
     public static void onInteraction(InputEvent.InteractionKeyMappingTriggered event) {
         if (event.isAttack()) {
             Minecraft mc = Minecraft.getInstance();
-            if (mc.player != null && mc.player.getMainHandItem().getItem() instanceof WeldingTorchItem) {
-                event.setCanceled(true);
+            if (mc.player != null) {
+                var item = mc.player.getMainHandItem().getItem();
+                if (item instanceof WeldingTorchItem || item instanceof PlasmaCutterItem) {
+                    event.setCanceled(true);
+                }
             }
         }
     }

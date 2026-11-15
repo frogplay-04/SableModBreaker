@@ -1,6 +1,7 @@
 package com.FrogPlay.sablemobbreaker.block;
 
 import com.FrogPlay.sablemobbreaker.SableMobBreaker;
+import com.FrogPlay.sablemobbreaker.item.OxygenTankItem;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.nbt.CompoundTag;
@@ -15,6 +16,9 @@ public class OxygenShelfBlockEntity extends BlockEntity {
 
     private static final ResourceLocation OXYGEN_TANK_ID =
             ResourceLocation.fromNamespaceAndPath(SableMobBreaker.MOD_ID, "oxygen_tank");
+
+    // Расход: 100 FE за 1 единицу воздуха
+    private static final int FE_PER_AIR = 100;
 
     private final EnergyStorage energyStorage = new EnergyStorage(100_000, 1_000, 1_000, 0) {
         @Override
@@ -51,6 +55,32 @@ public class OxygenShelfBlockEntity extends BlockEntity {
 
     public EnergyStorage getEnergyStorage() { return energyStorage; }
     public ItemStackHandler getItemHandler() { return itemHandler; }
+
+    // Вызывается из тикера блока (см. ниже)
+    public void tick() {
+        if (level == null || level.isClientSide) return;
+
+        for (int i = 0; i < itemHandler.getSlots(); i++) {
+            ItemStack stack = itemHandler.getStackInSlot(i);
+            if (stack.isEmpty() || !(stack.getItem() instanceof OxygenTankItem)) continue;
+
+            int currentAir = OxygenTankItem.getAir(stack);
+            if (currentAir >= OxygenTankItem.MAX_AIR) continue;
+
+            int airNeeded = OxygenTankItem.MAX_AIR - currentAir;
+            int energyNeeded = airNeeded * FE_PER_AIR;
+
+            int energyAvailable = energyStorage.extractEnergy(energyNeeded, true);
+            if (energyAvailable < FE_PER_AIR) continue; // Нужно хотя бы на 1 единицу
+
+            int airToAdd = Math.min(airNeeded, energyAvailable / FE_PER_AIR);
+            int energyToUse = airToAdd * FE_PER_AIR;
+
+            energyStorage.extractEnergy(energyToUse, false);
+            OxygenTankItem.setAir(stack, currentAir + airToAdd);
+            itemHandler.setStackInSlot(i, stack); // Триггерит onContentsChanged
+        }
+    }
 
     @Override
     protected void saveAdditional(CompoundTag tag, HolderLookup.Provider registries) {

@@ -3,10 +3,13 @@ package com.FrogPlay.sablemobbreaker.event;
 import com.FrogPlay.sablemobbreaker.SableMobBreaker;
 import com.FrogPlay.sablemobbreaker.block.ModBlocks;
 import com.FrogPlay.sablemobbreaker.item.FuelTankFluidHandler;
+import com.FrogPlay.sablemobbreaker.item.OxygenTankItem;
+import com.FrogPlay.sablemobbreaker.item.PlasmaCutterItem;
 import com.FrogPlay.sablemobbreaker.item.WeldingTorchInventory;
 import com.FrogPlay.sablemobbreaker.item.WeldingTorchItem;
 import com.FrogPlay.sablemobbreaker.network.BlockHealthSyncPacket;
 import com.FrogPlay.sablemobbreaker.util.BlockHealthManager;
+import com.FrogPlay.sablemobbreaker.util.SubLevelDamageHelper;
 import dev.ryanhcode.sable.api.sublevel.SubLevelContainer;
 import dev.ryanhcode.sable.companion.math.BoundingBox3dc;
 import dev.ryanhcode.sable.sublevel.SubLevel;
@@ -96,7 +99,7 @@ public class WeldingTorchHandler {
 
         for (int i = 0; i < player.getInventory().getContainerSize(); i++) {
             ItemStack stack = player.getInventory().getItem(i);
-            if (stack.getItem() instanceof WeldingTorchItem) {
+            if (stack.getItem() instanceof WeldingTorchItem || stack.getItem() instanceof PlasmaCutterItem) {
                 int fuse = WeldingTorchItem.getFuse(stack);
                 if (fuse > 0) {
                     fuse--;
@@ -117,8 +120,10 @@ public class WeldingTorchHandler {
         }
 
         ItemStack mainHand = player.getMainHandItem();
+        Level level = player.level();
+
+        // ЛОГИКА СВАРОЧНОГО АППАРАТА
         if (mainHand.getItem() instanceof WeldingTorchItem && WeldingTorchItem.isOn(mainHand)) {
-            Level level = player.level();
             ItemStack bottle = WeldingTorchItem.getBottle(mainHand);
             int fuel = getFuelAmount(bottle);
 
@@ -148,40 +153,38 @@ public class WeldingTorchHandler {
                 for (LivingEntity mob : entities) {
                     mob.igniteForSeconds(2);
                     mob.hurt(player.damageSources().playerAttack(player), 1.0f);
-                    if (level instanceof ServerLevel serverLevel) {
-                        serverLevel.sendParticles(ParticleTypes.FLAME,
-                                mob.getX(), mob.getY() + 1, mob.getZ(),
-                                5, 0.2, 0.2, 0.2, 0.05);
-                    }
                 }
             }
 
-            SubLevelContainer container = SubLevelContainer.getContainer(level);
-            if (container != null) {
-                SubLevel targetSubLevel = null;
-                double closestDistSq = 25.0;
+            if (player.tickCount % 5 == 0) {
+                SubLevelContainer container = SubLevelContainer.getContainer(level);
+                if (container != null) {
+                    SubLevel targetSubLevel = null;
+                    double closestDistSq = 25.0;
 
-                for (SubLevel sl : container.getAllSubLevels()) {
-                    if (sl.isRemoved()) continue;
-                    BoundingBox3dc box = sl.boundingBox();
-                    double dx = Math.max(0, Math.max(box.minX() - player.getX(), player.getX() - box.maxX()));
-                    double dy = Math.max(0, Math.max(box.minY() - player.getY(), player.getY() - box.maxY()));
-                    double dz = Math.max(0, Math.max(box.minZ() - player.getZ(), player.getZ() - box.maxZ()));
-                    double distSq = dx * dx + dy * dy + dz * dz;
-                    if (distSq <= closestDistSq) {
-                        closestDistSq = distSq;
-                        targetSubLevel = sl;
+                    for (SubLevel sl : container.getAllSubLevels()) {
+                        if (sl.isRemoved()) continue;
+                        BoundingBox3dc box = sl.boundingBox();
+                        double dx = Math.max(0, Math.max(box.minX() - player.getX(), player.getX() - box.maxX()));
+                        double dy = Math.max(0, Math.max(box.minY() - player.getY(), player.getY() - box.maxY()));
+                        double dz = Math.max(0, Math.max(box.minZ() - player.getZ(), player.getZ() - box.maxZ()));
+                        double distSq = dx * dx + dy * dy + dz * dz;
+                        if (distSq <= closestDistSq) {
+                            closestDistSq = distSq;
+                            targetSubLevel = sl;
+                        }
                     }
-                }
 
-                if (targetSubLevel != null) {
-                    int cost = autoRepair(player, targetSubLevel, true, fuel);
-                    if (cost > 0) {
-                        autoRepair(player, targetSubLevel, false, cost);
-                        drainFuel(bottle, cost);
-                        WeldingTorchItem.setBottle(mainHand, bottle);
-                        level.playSound(null, player.getX(), player.getY(), player.getZ(),
-                                SoundEvents.FIRE_AMBIENT, SoundSource.PLAYERS, 0.5f, 1.5f);
+                    if (targetSubLevel != null) {
+                        int maxToRepair = Math.min(5, fuel);
+                        int cost = autoRepair(player, targetSubLevel, true, maxToRepair);
+                        if (cost > 0) {
+                            autoRepair(player, targetSubLevel, false, cost);
+                            drainFuel(bottle, cost);
+                            WeldingTorchItem.setBottle(mainHand, bottle);
+                            level.playSound(null, player.getX(), player.getY(), player.getZ(),
+                                    SoundEvents.FIRE_AMBIENT, SoundSource.PLAYERS, 0.5f, 1.5f);
+                        }
                     }
                 }
             }
@@ -196,6 +199,65 @@ public class WeldingTorchHandler {
                 }
             }
         }
+
+        // ЛОГИКА ПЛАЗМЕННОГО РЕЗАКА
+        if (mainHand.getItem() instanceof PlasmaCutterItem && WeldingTorchItem.isOn(mainHand)) {
+            ItemStack bottle = WeldingTorchItem.getBottle(mainHand);
+
+            // Проверка на топливо (взрыв)
+            if (getFuelAmount(bottle) > 0) {
+                level.explode(null, player.getX(), player.getY() + 0.5, player.getZ(), 3.0f, Level.ExplosionInteraction.BLOCK);
+                mainHand.shrink(1);
+                player.hurt(player.damageSources().explosion(null), 10.0f);
+                return;
+            }
+
+            // Проверка кислорода
+            int air = 0;
+            if (bottle.getItem() instanceof OxygenTankItem) {
+                air = OxygenTankItem.getAir(bottle);
+            }
+            if (air <= 0) {
+                WeldingTorchItem.setOn(mainHand, false);
+                level.playSound(null, player.getX(), player.getY(), player.getZ(),
+                        SoundEvents.FIRE_EXTINGUISH, SoundSource.PLAYERS, 0.5f, 1.0f);
+                return;
+            }
+
+            // Частицы (синее пламя)
+            if (player.tickCount % 2 == 0 && level instanceof ServerLevel serverLevel) {
+                Vec3 look = player.getLookAngle();
+                Vec3 start = player.getEyePosition().add(look.scale(1.2));
+                if (player instanceof ServerPlayer serverPlayer) {
+                    serverLevel.sendParticles(serverPlayer, ParticleTypes.SOUL_FIRE_FLAME, true,
+                            start.x, start.y, start.z, 3, 0.05, 0.05, 0.05, 0.01);
+                }
+            }
+
+            // Ломание блока (раз в 10 тиков)
+            if (player.tickCount % 10 == 0) {
+                Vec3 eyePos = player.getEyePosition();
+                Vec3 lookVec = player.getLookAngle();
+                Vec3 hitPos = eyePos.add(lookVec.scale(4.0)); // Бьем в 4 блоках от глаз (макс радиус 5)
+
+                SubLevelContainer container = SubLevelContainer.getContainer(level);
+                if (container != null) {
+                    for (SubLevel sl : container.getAllSubLevels()) {
+                        if (sl.isRemoved()) continue;
+                        // Проверяем, что мы смотрим на постройку
+                        if (sl.boundingBox().contains(hitPos.x, hitPos.y, hitPos.z)) {
+                            if (SubLevelDamageHelper.damageBlockExact(level, sl, hitPos, 9999)) {
+                                OxygenTankItem.setAir(bottle, air - 10);
+                                WeldingTorchItem.setBottle(mainHand, bottle);
+                                level.playSound(null, player.getX(), player.getY(), player.getZ(),
+                                        SoundEvents.FIRE_AMBIENT, SoundSource.PLAYERS, 0.5f, 2.0f);
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+        }
     }
 
     @SubscribeEvent
@@ -203,7 +265,7 @@ public class WeldingTorchHandler {
         if (event.getEntity().level().isClientSide()) return;
         if (event.getEntity() instanceof ItemEntity itemEntity) {
             ItemStack stack = itemEntity.getItem();
-            if (stack.getItem() instanceof WeldingTorchItem) {
+            if (stack.getItem() instanceof WeldingTorchItem || stack.getItem() instanceof PlasmaCutterItem) {
                 int fuse = WeldingTorchItem.getFuse(stack);
                 if (fuse > 0) {
                     fuse--;
@@ -353,7 +415,6 @@ public class WeldingTorchHandler {
                                 "[SMB] repair handleBlockChange failed", t);
                     }
 
-                    // ИСПРАВЛЕНИЕ: Всегда пишем в массив блоков для восстановления пути
                     try {
                         LevelChunkSection[] sections = chunk.getSections();
                         int sectionIndex = chunk.getSectionIndex(y);
