@@ -1,6 +1,7 @@
 package com.FrogPlay.sablemobbreaker.network;
 
 import com.FrogPlay.sablemobbreaker.SableMobBreaker;
+import com.FrogPlay.sablemobbreaker.item.PlasmaCutterItem;
 import com.FrogPlay.sablemobbreaker.item.WeldingTorchItem;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.codec.StreamCodec;
@@ -30,10 +31,19 @@ public record SetTorchStatePacket(boolean state) implements CustomPacketPayload 
             Player player = context.player();
             if (player != null) {
                 ItemStack stack = player.getMainHandItem();
+
                 if (stack.getItem() instanceof WeldingTorchItem) {
                     boolean wasOn = WeldingTorchItem.isOn(stack);
                     if (wasOn != packet.state()) {
                         WeldingTorchItem.setOn(stack, packet.state());
+                        player.level().playSound(null, player.getX(), player.getY(), player.getZ(),
+                                packet.state() ? SoundEvents.FLINTANDSTEEL_USE : SoundEvents.FIRE_EXTINGUISH,
+                                SoundSource.PLAYERS, 0.5F, packet.state() ? 1.0F : 1.5F);
+                    }
+                } else if (stack.getItem() instanceof PlasmaCutterItem) {
+                    boolean wasOn = PlasmaCutterItem.isOn(stack);
+                    if (wasOn != packet.state()) {
+                        PlasmaCutterItem.setOn(stack, packet.state());
                         player.level().playSound(null, player.getX(), player.getY(), player.getZ(),
                                 packet.state() ? SoundEvents.FLINTANDSTEEL_USE : SoundEvents.FIRE_EXTINGUISH,
                                 SoundSource.PLAYERS, 0.5F, packet.state() ? 1.0F : 1.5F);

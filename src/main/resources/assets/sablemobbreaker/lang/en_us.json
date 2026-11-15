@@ -25,5 +25,6 @@
   "tooltip.sablemobbreaker.welding_torch.bottle.prefix": "Bottle: ",
   "tooltip.sablemobbreaker.welding_torch.danger.oxygen": "⚠ DANGER! Oxygen will explode",
   "tooltip.sablemobbreaker.welding_torch.danger.fuel": "⚠ DANGER! Fuel will explode",
-  "tooltip.sablemobbreaker.welding_torch.fuel": "Fuel: %s / %s"
+  "tooltip.sablemobbreaker.welding_torch.fuel": "Fuel: %s / %s",
+  "tooltip.sablemobbreaker.oxygen_shelf.tanks": "Tanks: %s / %s"
 }

@@ -1,6 +1,5 @@
 package com.FrogPlay.sablemobbreaker.item;
 
-import com.FrogPlay.sablemobbreaker.event.WeldingTorchHandler;
 import net.minecraft.world.item.ItemStack;
 import net.neoforged.neoforge.items.ItemStackHandler;
 import org.jetbrains.annotations.NotNull;
@@ -23,7 +22,6 @@ public class PlasmaCutterInventory extends ItemStackHandler {
 
     @Override
     public boolean isItemValid(int slot, @NotNull ItemStack stack) {
-        // Принимаем только кислородные баллоны
-        return stack.getItem() instanceof OxygenTankItem;
+        return stack.getItem() instanceof OxygenTankItem || stack.getItem() instanceof FuelTankItem;
     }
 }

@@ -15,6 +15,7 @@ import dev.ryanhcode.sable.companion.math.BoundingBox3dc;
 import dev.ryanhcode.sable.sublevel.SubLevel;
 import dev.ryanhcode.sable.sublevel.plot.PlotChunkHolder;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.core.particles.ParticleTypes;
 import net.minecraft.core.registries.BuiltInRegistries;
@@ -32,12 +33,16 @@ import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.component.CustomData;
 import net.minecraft.world.level.ChunkPos;
+import net.minecraft.world.level.ClipContext;
 import net.minecraft.world.level.Level;
+import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.entity.BlockEntityType;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.chunk.LevelChunk;
 import net.minecraft.world.level.chunk.LevelChunkSection;
+import net.minecraft.world.phys.BlockHitResult;
+import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.Vec3;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.ModList;
@@ -76,6 +81,16 @@ public class WeldingTorchHandler {
     }
 
     @SubscribeEvent
+    public static void registerCapabilities(RegisterCapabilitiesEvent event) {
+        event.registerItem(Capabilities.ItemHandler.ITEM,
+                (stack, ctx) -> new WeldingTorchInventory(stack),
+                SableMobBreaker.WELDING_TORCH.get());
+        event.registerItem(Capabilities.FluidHandler.ITEM,
+                (stack, ctx) -> new FuelTankFluidHandler(stack),
+                SableMobBreaker.FUEL_TANK.get());
+    }
+
+    @SubscribeEvent
     public static void onAttackEntity(AttackEntityEvent event) {
         if (event.getEntity().getMainHandItem().getItem() instanceof WeldingTorchItem ||
                 event.getEntity().getMainHandItem().getItem() instanceof PlasmaCutterItem) {
@@ -88,7 +103,6 @@ public class WeldingTorchHandler {
         Player player = event.getEntity();
         if (player.level().isClientSide()) return;
 
-        // Взрыв при взрыве баллона в руке (таймер)
         for (int i = 0; i < player.getInventory().getContainerSize(); i++) {
             ItemStack stack = player.getInventory().getItem(i);
             if (stack.getItem() instanceof WeldingTorchItem || stack.getItem() instanceof PlasmaCutterItem) {
@@ -114,7 +128,6 @@ public class WeldingTorchHandler {
         ItemStack mainHand = player.getMainHandItem();
         Level level = player.level();
 
-        // === ЛОГИКА СВАРОЧНОГО АППАРАТА ===
         if (mainHand.getItem() instanceof WeldingTorchItem && WeldingTorchItem.isOn(mainHand)) {
             ItemStack bottle = WeldingTorchItem.getBottle(mainHand);
             int fuel = getFuelAmount(bottle);
@@ -200,13 +213,12 @@ public class WeldingTorchHandler {
         if (mainHand.getItem() instanceof PlasmaCutterItem && PlasmaCutterItem.isOn(mainHand)) {
             ItemStack bottle = PlasmaCutterItem.getBottle(mainHand);
 
-            if (getFuelAmount(bottle) > 0) {
+            if (bottle.getItem() instanceof com.FrogPlay.sablemobbreaker.item.FuelTankItem || getFuelAmount(bottle) > 0) {
                 level.explode(null, player.getX(), player.getY() + 0.5, player.getZ(), 3.0f, Level.ExplosionInteraction.BLOCK);
                 mainHand.shrink(1);
                 player.hurt(player.damageSources().explosion(null), 10.0f);
                 return;
             }
-
 
             int air = 0;
             if (bottle.getItem() instanceof OxygenTankItem) {
@@ -229,14 +241,44 @@ public class WeldingTorchHandler {
             if (player.tickCount % 10 == 0) {
                 Vec3 eyePos = player.getEyePosition();
                 Vec3 lookVec = player.getLookAngle();
-                Vec3 hitPos = eyePos.add(lookVec.scale(4.0));
+                Vec3 targetVec = eyePos.add(lookVec.scale(4.5));
+
+                ClipContext clipContext = new ClipContext(eyePos, targetVec, ClipContext.Block.OUTLINE, ClipContext.Fluid.NONE, player);
+                BlockHitResult hitResult = level.clip(clipContext);
+
+                if (hitResult.getType() == HitResult.Type.BLOCK) {
+                    BlockPos hitPos = hitResult.getBlockPos();
+                    BlockState hitState = level.getBlockState(hitPos);
+
+                    if (!hitState.isAir() && hitState.getDestroySpeed(level, hitPos) >= 0) {
+                        // Проверка на воду (все 6 сторон должны быть не воздухом)
+                        boolean isUnderwater = true;
+                        for (Direction dir : Direction.values()) {
+                            if (level.getBlockState(hitPos.relative(dir)).isAir()) {
+                                isUnderwater = false;
+                                break;
+                            }
+                        }
+
+                        if (isUnderwater) {
+                            level.setBlockAndUpdate(hitPos, Blocks.WATER.defaultBlockState());
+                            level.playSound(null, hitPos, SoundEvents.FIRE_EXTINGUISH, SoundSource.BLOCKS, 1.0f, 1.0f);
+                        } else {
+                            level.destroyBlock(hitPos, true, player);
+                        }
+
+                        OxygenTankItem.setAir(bottle, air - 10);
+                        PlasmaCutterItem.setBottle(mainHand, bottle);
+                        return;
+                    }
+                }
 
                 SubLevelContainer container = SubLevelContainer.getContainer(level);
                 if (container != null) {
                     for (SubLevel sl : container.getAllSubLevels()) {
                         if (sl.isRemoved()) continue;
-                        if (sl.boundingBox().contains(hitPos.x, hitPos.y, hitPos.z)) {
-                            if (SubLevelDamageHelper.damageBlockExact(level, sl, hitPos, 9999)) {
+                        if (sl.boundingBox().contains(targetVec.x, targetVec.y, targetVec.z)) {
+                            if (SubLevelDamageHelper.damageBlockExact(level, sl, targetVec, 9999)) {
                                 OxygenTankItem.setAir(bottle, air - 10);
                                 PlasmaCutterItem.setBottle(mainHand, bottle);
                                 level.playSound(null, player.getX(), player.getY(), player.getZ(), SoundEvents.FIRE_AMBIENT, SoundSource.PLAYERS, 0.5f, 2.0f);

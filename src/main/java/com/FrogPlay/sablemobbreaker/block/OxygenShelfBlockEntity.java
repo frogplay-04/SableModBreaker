@@ -1,9 +1,14 @@
 package com.FrogPlay.sablemobbreaker.block;
 
 import com.FrogPlay.sablemobbreaker.SableMobBreaker;
+import com.FrogPlay.sablemobbreaker.item.OxygenTankItem;
+import com.simibubi.create.api.equipment.goggles.IHaveGoggleInformation;
+import com.simibubi.create.foundation.utility.CreateLang;
+import net.minecraft.ChatFormatting;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.nbt.CompoundTag;
+import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.block.entity.BlockEntity;
@@ -11,10 +16,11 @@ import net.minecraft.world.level.block.state.BlockState;
 import net.neoforged.neoforge.energy.EnergyStorage;
 import net.neoforged.neoforge.items.ItemStackHandler;
 
-public class OxygenShelfBlockEntity extends BlockEntity {
+import java.util.List;
 
-    private static final ResourceLocation OXYGEN_TANK_ID =
-            ResourceLocation.fromNamespaceAndPath(SableMobBreaker.MOD_ID, "oxygen_tank");
+public class OxygenShelfBlockEntity extends BlockEntity implements IHaveGoggleInformation {
+
+    private static final ResourceLocation OXYGEN_TANK_ID = ResourceLocation.fromNamespaceAndPath(SableMobBreaker.MOD_ID, "oxygen_tank");
     private static final int FE_PER_AIR = 100;
 
     private final EnergyStorage energyStorage = new EnergyStorage(100_000, 1_000, 1_000, 0) {
@@ -36,7 +42,6 @@ public class OxygenShelfBlockEntity extends BlockEntity {
         @Override
         protected void onContentsChanged(int slot) {
             setChanged();
-            // ОБНОВЛЕНИЕ КЛИЕНТА
             if (level != null && !level.isClientSide) {
                 level.sendBlockUpdated(worldPosition, getBlockState(), getBlockState(), 3);
             }
@@ -46,7 +51,7 @@ public class OxygenShelfBlockEntity extends BlockEntity {
         public boolean isItemValid(int slot, ItemStack stack) {
             if (stack.isEmpty()) return false;
             ResourceLocation id = net.minecraft.core.registries.BuiltInRegistries.ITEM.getKey(stack.getItem());
-            return id.equals(OXYGEN_TANK_ID);
+            return id.equals(OXYGEN_TANK_ID); // Теперь переменная используется
         }
     };
 
@@ -62,12 +67,12 @@ public class OxygenShelfBlockEntity extends BlockEntity {
 
         for (int i = 0; i < itemHandler.getSlots(); i++) {
             ItemStack stack = itemHandler.getStackInSlot(i);
-            if (stack.isEmpty() || !(stack.getItem() instanceof com.FrogPlay.sablemobbreaker.item.OxygenTankItem)) continue;
+            if (stack.isEmpty() || !(stack.getItem() instanceof OxygenTankItem)) continue;
 
-            int currentAir = com.FrogPlay.sablemobbreaker.item.OxygenTankItem.getAir(stack);
-            if (currentAir >= com.FrogPlay.sablemobbreaker.item.OxygenTankItem.MAX_AIR) continue;
+            int currentAir = OxygenTankItem.getAir(stack);
+            if (currentAir >= OxygenTankItem.MAX_AIR) continue;
 
-            int airNeeded = com.FrogPlay.sablemobbreaker.item.OxygenTankItem.MAX_AIR - currentAir;
+            int airNeeded = OxygenTankItem.MAX_AIR - currentAir;
             int energyNeeded = airNeeded * FE_PER_AIR;
 
             int energyAvailable = energyStorage.extractEnergy(energyNeeded, true);
@@ -77,9 +82,27 @@ public class OxygenShelfBlockEntity extends BlockEntity {
             int energyToUse = airToAdd * FE_PER_AIR;
 
             energyStorage.extractEnergy(energyToUse, false);
-            com.FrogPlay.sablemobbreaker.item.OxygenTankItem.setAir(stack, currentAir + airToAdd);
+            OxygenTankItem.setAir(stack, currentAir + airToAdd);
             itemHandler.setStackInSlot(i, stack);
         }
+    }
+
+    @Override
+    public boolean addToGoggleTooltip(List<Component> tooltip, boolean isPlayerSneaking) {
+        CreateLang.translate("gui.goggles.energy_storage").forGoggles(tooltip);
+        CreateLang.number(energyStorage.getEnergyStored()).translate("generic.unit.fe").forGoggles(tooltip, 1);
+
+        int tanks = 0;
+        for (int i = 0; i < itemHandler.getSlots(); i++) {
+            if (itemHandler.getStackInSlot(i).getItem() instanceof OxygenTankItem) {
+                tanks++;
+            }
+        }
+
+        CreateLang.text("").forGoggles(tooltip);
+        tooltip.add(Component.translatable("tooltip.sablemobbreaker.oxygen_shelf.tanks", tanks, 3).withStyle(ChatFormatting.AQUA));
+
+        return true;
     }
 
     @Override
@@ -93,7 +116,10 @@ public class OxygenShelfBlockEntity extends BlockEntity {
     protected void loadAdditional(CompoundTag tag, HolderLookup.Provider registries) {
         super.loadAdditional(tag, registries);
         if (tag.contains("Energy")) {
-            energyStorage.deserializeNBT(registries, tag.get("Energy"));
+            net.minecraft.nbt.Tag energyTag = tag.get("Energy");
+            if (energyTag != null) {
+                energyStorage.deserializeNBT(registries, energyTag);
+            }
         }
         if (tag.contains("Inventory")) {
             itemHandler.deserializeNBT(registries, tag.getCompound("Inventory"));

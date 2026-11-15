@@ -46,13 +46,18 @@ public class OxygenShelfBlock extends Block implements EntityBlock {
 
             if (level.isClientSide) return ItemInteractionResult.SUCCESS;
 
-            for (int i = 0; i < handler.getSlots(); i++) {
-                if (handler.getStackInSlot(i).isEmpty() && handler.isItemValid(i, stack)) {
-                    handler.setStackInSlot(i, stack.copyWithCount(1));
-                    stack.shrink(1);
-                    return ItemInteractionResult.SUCCESS;
+            if (stack.getItem() instanceof com.FrogPlay.sablemobbreaker.item.OxygenTankItem) {
+                for (int i = 0; i < handler.getSlots(); i++) {
+                    if (handler.getStackInSlot(i).isEmpty()) {
+                        handler.setStackInSlot(i, stack.copyWithCount(1));
+                        stack.shrink(1);
+                        return ItemInteractionResult.SUCCESS;
+                    }
                 }
+                return ItemInteractionResult.FAIL;
             }
+
+            return ItemInteractionResult.PASS_TO_DEFAULT_BLOCK_INTERACTION;
         }
         return ItemInteractionResult.PASS_TO_DEFAULT_BLOCK_INTERACTION;
     }
@@ -67,7 +72,7 @@ public class OxygenShelfBlock extends Block implements EntityBlock {
             for (int i = 0; i < handler.getSlots(); i++) {
                 ItemStack slotStack = handler.getStackInSlot(i);
                 if (!slotStack.isEmpty()) {
-                    player.setItemInHand(InteractionHand.MAIN_HAND, slotStack);
+                    player.getInventory().placeItemBackInInventory(slotStack);
                     handler.setStackInSlot(i, ItemStack.EMPTY);
                     return InteractionResult.SUCCESS;
                 }

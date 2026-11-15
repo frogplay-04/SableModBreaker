@@ -28,10 +28,14 @@ public class OxygenShelfRenderer implements BlockEntityRenderer<OxygenShelfBlock
             if (stack.isEmpty()) continue;
 
             poseStack.pushPose();
-            poseStack.translate(0.5D, 0.15D, 0.5D);
-            poseStack.translate((i - 1) * 0.25D, 0.0D, 0.0D);
-            poseStack.mulPose(Axis.XP.rotationDegrees(90));
-            poseStack.scale(0.65F, 0.65F, 0.65F);
+
+            poseStack.translate(0.5D, 0.25D, 0.5D);
+
+            poseStack.translate((i - 1) * 0.3D, 0.0D, 0.0D);
+
+            poseStack.mulPose(Axis.XP.rotationDegrees(0));
+
+            poseStack.scale(0.5F, 0.5F, 0.5F);
 
             this.itemRenderer.renderStatic(
                     stack,
@@ -49,8 +53,6 @@ public class OxygenShelfRenderer implements BlockEntityRenderer<OxygenShelfBlock
 
     @Override
     public AABB getRenderBoundingBox(OxygenShelfBlockEntity blockEntity) {
-        var pos = blockEntity.getBlockPos();
-        return new AABB(pos.getX() - 1, pos.getY(), pos.getZ() - 1,
-                pos.getX() + 2, pos.getY() + 2, pos.getZ() + 2);
+        return new AABB(blockEntity.getBlockPos()).inflate(1.0);
     }
 }
