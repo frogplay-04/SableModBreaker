@@ -12,6 +12,7 @@ import net.minecraft.client.renderer.entity.ItemRenderer;
 import net.minecraft.world.item.ItemDisplayContext;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.phys.AABB;
+import org.jetbrains.annotations.NotNull;
 
 public class OxygenShelfRenderer implements BlockEntityRenderer<OxygenShelfBlockEntity> {
 
@@ -22,20 +23,20 @@ public class OxygenShelfRenderer implements BlockEntityRenderer<OxygenShelfBlock
     }
 
     @Override
-    public void render(OxygenShelfBlockEntity blockEntity, float partialTick, PoseStack poseStack, MultiBufferSource buffer, int packedLight, int packedOverlay) {
+    public void render(@NotNull OxygenShelfBlockEntity blockEntity, float partialTick, @NotNull PoseStack poseStack, @NotNull MultiBufferSource buffer, int packedLight, int packedOverlay) {
         for (int i = 0; i < 3; i++) {
             ItemStack stack = blockEntity.getItemHandler().getStackInSlot(i);
             if (stack.isEmpty()) continue;
 
             poseStack.pushPose();
 
-            poseStack.translate(0.5D, 0.25D, 0.5D);
+            poseStack.translate(0.5D, 0.3D, 0.5D);
 
             poseStack.translate((i - 1) * 0.3D, 0.0D, 0.0D);
 
-            poseStack.mulPose(Axis.XP.rotationDegrees(0));
+            poseStack.mulPose(Axis.XP.rotationDegrees(90));
 
-            poseStack.scale(0.5F, 0.5F, 0.5F);
+            poseStack.scale(1F, 1F, 1F);
 
             this.itemRenderer.renderStatic(
                     stack,
@@ -52,7 +53,7 @@ public class OxygenShelfRenderer implements BlockEntityRenderer<OxygenShelfBlock
     }
 
     @Override
-    public AABB getRenderBoundingBox(OxygenShelfBlockEntity blockEntity) {
-        return new AABB(blockEntity.getBlockPos()).inflate(1.0);
+    public @NotNull AABB getRenderBoundingBox(@NotNull OxygenShelfBlockEntity blockEntity) {
+        return new AABB(blockEntity.getBlockPos()).inflate(2.0);
     }
 }

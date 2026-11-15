@@ -3,11 +3,11 @@ package com.FrogPlay.sablemobbreaker.block;
 import com.FrogPlay.sablemobbreaker.SableMobBreaker;
 import com.FrogPlay.sablemobbreaker.item.OxygenTankItem;
 import com.simibubi.create.api.equipment.goggles.IHaveGoggleInformation;
-import com.simibubi.create.foundation.utility.CreateLang;
 import net.minecraft.ChatFormatting;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.nbt.CompoundTag;
+import net.minecraft.nbt.Tag;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.ItemStack;
@@ -51,7 +51,7 @@ public class OxygenShelfBlockEntity extends BlockEntity implements IHaveGoggleIn
         public boolean isItemValid(int slot, ItemStack stack) {
             if (stack.isEmpty()) return false;
             ResourceLocation id = net.minecraft.core.registries.BuiltInRegistries.ITEM.getKey(stack.getItem());
-            return id.equals(OXYGEN_TANK_ID); // Теперь переменная используется
+            return id.equals(OXYGEN_TANK_ID);
         }
     };
 
@@ -89,8 +89,8 @@ public class OxygenShelfBlockEntity extends BlockEntity implements IHaveGoggleIn
 
     @Override
     public boolean addToGoggleTooltip(List<Component> tooltip, boolean isPlayerSneaking) {
-        CreateLang.translate("gui.goggles.energy_storage").forGoggles(tooltip);
-        CreateLang.number(energyStorage.getEnergyStored()).translate("generic.unit.fe").forGoggles(tooltip, 1);
+        tooltip.add(Component.translatable("gui.goggles.energy_storage"));
+        tooltip.add(Component.literal(" " + energyStorage.getEnergyStored() + " FE").withStyle(ChatFormatting.AQUA));
 
         int tanks = 0;
         for (int i = 0; i < itemHandler.getSlots(); i++) {
@@ -99,7 +99,7 @@ public class OxygenShelfBlockEntity extends BlockEntity implements IHaveGoggleIn
             }
         }
 
-        CreateLang.text("").forGoggles(tooltip);
+        tooltip.add(Component.literal(""));
         tooltip.add(Component.translatable("tooltip.sablemobbreaker.oxygen_shelf.tanks", tanks, 3).withStyle(ChatFormatting.AQUA));
 
         return true;
@@ -116,7 +116,7 @@ public class OxygenShelfBlockEntity extends BlockEntity implements IHaveGoggleIn
     protected void loadAdditional(CompoundTag tag, HolderLookup.Provider registries) {
         super.loadAdditional(tag, registries);
         if (tag.contains("Energy")) {
-            net.minecraft.nbt.Tag energyTag = tag.get("Energy");
+            Tag energyTag = tag.get("Energy");
             if (energyTag != null) {
                 energyStorage.deserializeNBT(registries, energyTag);
             }

@@ -22,7 +22,8 @@ public class PlasmaCutterMenu extends AbstractContainerMenu {
         this.addSlot(new SlotItemHandler(handler, 0, 80, 20) {
             @Override
             public boolean mayPlace(ItemStack stack) {
-                return stack.getItem() instanceof com.FrogPlay.sablemobbreaker.item.OxygenTankItem;
+                return stack.getItem() instanceof com.FrogPlay.sablemobbreaker.item.OxygenTankItem ||
+                        stack.getItem() instanceof com.FrogPlay.sablemobbreaker.item.FuelTankItem;
             }
         });
 

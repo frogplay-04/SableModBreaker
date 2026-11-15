@@ -1,7 +1,6 @@
 package com.FrogPlay.sablemobbreaker.menu;
 
 import com.FrogPlay.sablemobbreaker.SableMobBreaker;
-import com.FrogPlay.sablemobbreaker.event.WeldingTorchHandler;
 import com.FrogPlay.sablemobbreaker.item.WeldingTorchInventory;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.entity.player.Player;
@@ -23,7 +22,7 @@ public class WeldingTorchMenu extends AbstractContainerMenu {
         this.addSlot(new SlotItemHandler(handler, 0, 80, 20) {
             @Override
             public boolean mayPlace(ItemStack stack) {
-                return WeldingTorchHandler.isValidBottle(stack);
+                return stack.getItem() instanceof com.FrogPlay.sablemobbreaker.item.FuelTankItem;
             }
         });
 

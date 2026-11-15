@@ -15,7 +15,7 @@ import java.util.List;
 
 public class FuelTankItem extends Item {
 
-    public static final int CAPACITY = 500;
+    public static final int CAPACITY = 1500;
 
     public FuelTankItem(Properties properties) {
         super(properties);

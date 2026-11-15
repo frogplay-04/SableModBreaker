@@ -13,7 +13,7 @@ import java.util.List;
 
 public class OxygenTankItem extends Item {
 
-    public static final int MAX_AIR = 500;
+    public static final int MAX_AIR = 1500;
 
     public OxygenTankItem(Properties properties) {
         super(properties);

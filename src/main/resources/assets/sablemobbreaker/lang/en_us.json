@@ -26,5 +26,6 @@
   "tooltip.sablemobbreaker.welding_torch.danger.oxygen": "⚠ DANGER! Oxygen will explode",
   "tooltip.sablemobbreaker.welding_torch.danger.fuel": "⚠ DANGER! Fuel will explode",
   "tooltip.sablemobbreaker.welding_torch.fuel": "Fuel: %s / %s",
+  "gui.goggles.energy_storage": "Energy:",
   "tooltip.sablemobbreaker.oxygen_shelf.tanks": "Tanks: %s / %s"
 }
