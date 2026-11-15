@@ -15,7 +15,7 @@ import java.util.List;
 
 public class FuelTankItem extends Item {
 
-    public static final int CAPACITY = 2000;
+    public static final int CAPACITY = 500;
 
     public FuelTankItem(Properties properties) {
         super(properties);
@@ -40,7 +40,7 @@ public class FuelTankItem extends Item {
     @Override
     public void appendHoverText(ItemStack stack, TooltipContext context, List<Component> tooltip, TooltipFlag flag) {
         int fluid = getFluidAmount(stack);
-        tooltip.add(Component.literal("Топливо: " + fluid + " / " + CAPACITY)
+        tooltip.add(Component.translatable("tooltip.sablemobbreaker.fuel_tank.fuel", fluid, CAPACITY)
                 .withStyle(fluid > 0 ? ChatFormatting.AQUA : ChatFormatting.DARK_GRAY));
 
         if (fluid > 0) {

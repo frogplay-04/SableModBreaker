@@ -13,7 +13,7 @@ import java.util.List;
 
 public class OxygenTankItem extends Item {
 
-    public static final int MAX_AIR = 2000;
+    public static final int MAX_AIR = 500;
 
     public OxygenTankItem(Properties properties) {
         super(properties);
@@ -48,8 +48,9 @@ public class OxygenTankItem extends Item {
     @Override
     public void appendHoverText(ItemStack stack, TooltipContext context, List<Component> tooltip, TooltipFlag flag) {
         int air = getAir(stack);
-        tooltip.add(Component.literal("Воздух: " + air + " / " + MAX_AIR)
+        tooltip.add(Component.translatable("tooltip.sablemobbreaker.oxygen_tank.air", air, MAX_AIR)
                 .withStyle(air > 0 ? ChatFormatting.AQUA : ChatFormatting.DARK_GRAY));
+
         if (air > 0) {
             tooltip.add(Component.literal(String.format("(%.0f%%)", (air * 100.0f) / MAX_AIR))
                     .withStyle(ChatFormatting.GRAY));

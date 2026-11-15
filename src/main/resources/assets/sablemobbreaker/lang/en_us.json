@@ -15,5 +15,8 @@
   "item.sablemobbreaker.plasma_cutter": "Plasma Cutter",
   "item.sablemobbreaker.oxygen_tank": "Oxygen Cylinder",
   "item.sablemobbreaker.hull": "Hull",
-  "block.sablemobbreaker.oxygen_shelf": "Oxygen Tank Shelf"
+  "block.sablemobbreaker.oxygen_shelf": "Oxygen Tank Shelf",
+  "container.sablemobbreaker.plasma_cutter": "Plasma Cutter",
+  "tooltip.sablemobbreaker.oxygen_tank.air": "Air: %s / %s",
+  "tooltip.sablemobbreaker.fuel_tank.fuel": "Fuel: %s / %s"
 }
