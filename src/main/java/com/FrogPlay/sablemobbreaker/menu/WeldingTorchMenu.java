@@ -16,22 +16,19 @@ public class WeldingTorchMenu extends AbstractContainerMenu {
     public WeldingTorchMenu(int id, Inventory playerInv, ItemStack torch) {
         super(SableMobBreaker.WELDING_TORCH_MENU.get(), id);
         this.torch = torch;
-
         IItemHandler handler = new WeldingTorchInventory(torch);
-
         this.addSlot(new SlotItemHandler(handler, 0, 80, 20) {
             @Override
             public boolean mayPlace(ItemStack stack) {
-                return stack.getItem() instanceof com.FrogPlay.sablemobbreaker.item.FuelTankItem;
+                return stack.getItem() instanceof com.FrogPlay.sablemobbreaker.item.FuelTankItem
+                        || stack.getItem() instanceof com.FrogPlay.sablemobbreaker.item.OxygenTankItem;
             }
         });
-
         for (int i = 0; i < 3; ++i) {
             for (int j = 0; j < 9; ++j) {
                 this.addSlot(new Slot(playerInv, j + i * 9 + 9, 8 + j * 18, 51 + i * 18));
             }
         }
-
         for (int k = 0; k < 9; ++k) {
             this.addSlot(new Slot(playerInv, k, 8 + k * 18, 109));
         }
@@ -56,7 +53,6 @@ public class WeldingTorchMenu extends AbstractContainerMenu {
             } else if (!this.moveItemStackTo(itemstack1, 0, 1, false)) {
                 return ItemStack.EMPTY;
             }
-
             if (itemstack1.isEmpty()) {
                 slot.setByPlayer(ItemStack.EMPTY);
             } else {

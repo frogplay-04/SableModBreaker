@@ -138,9 +138,17 @@ public class WeldingTorchHandler {
         ItemStack mainHand = player.getMainHandItem();
         Level level = player.level();
 
-        // === СВАРОЧНЫЙ АППАРАТ ===
         if (mainHand.getItem() instanceof WeldingTorchItem && WeldingTorchItem.isOn(mainHand)) {
             ItemStack bottle = WeldingTorchItem.getBottle(mainHand);
+
+            if (bottle.getItem() instanceof OxygenTankItem) {
+                level.explode(null, player.getX(), player.getY() + 0.5, player.getZ(),
+                        3.0f, Level.ExplosionInteraction.BLOCK);
+                mainHand.shrink(1);
+                player.hurt(player.damageSources().explosion(null), 10.0f);
+                return;
+            }
+
             int fuel = getFuelAmount(bottle);
 
             if (fuel <= 0) {

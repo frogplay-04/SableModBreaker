@@ -22,6 +22,6 @@ public class WeldingTorchInventory extends ItemStackHandler {
 
     @Override
     public boolean isItemValid(int slot, @NotNull ItemStack stack) {
-        return stack.getItem() instanceof FuelTankItem;
+        return stack.getItem() instanceof FuelTankItem || stack.getItem() instanceof OxygenTankItem;
     }
 }
