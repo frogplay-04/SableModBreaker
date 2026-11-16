@@ -1,5 +1,6 @@
 package com.FrogPlay.sablemobbreaker.client;
 
+import com.FrogPlay.sablemobbreaker.block.OxygenShelfBlock;
 import com.FrogPlay.sablemobbreaker.block.OxygenShelfBlockEntity;
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.math.Axis;
@@ -9,6 +10,7 @@ import net.minecraft.client.renderer.MultiBufferSource;
 import net.minecraft.client.renderer.blockentity.BlockEntityRenderer;
 import net.minecraft.client.renderer.blockentity.BlockEntityRendererProvider;
 import net.minecraft.client.renderer.entity.ItemRenderer;
+import net.minecraft.core.Direction;
 import net.minecraft.world.item.ItemDisplayContext;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.phys.AABB;
@@ -24,6 +26,8 @@ public class OxygenShelfRenderer implements BlockEntityRenderer<OxygenShelfBlock
 
     @Override
     public void render(@NotNull OxygenShelfBlockEntity blockEntity, float partialTick, @NotNull PoseStack poseStack, @NotNull MultiBufferSource buffer, int packedLight, int packedOverlay) {
+        Direction facing = blockEntity.getBlockState().getValue(OxygenShelfBlock.FACING);
+
         for (int i = 0; i < 3; i++) {
             ItemStack stack = blockEntity.getItemHandler().getStackInSlot(i);
             if (stack.isEmpty()) continue;
@@ -32,11 +36,11 @@ public class OxygenShelfRenderer implements BlockEntityRenderer<OxygenShelfBlock
 
             poseStack.translate(0.5D, 0.3D, 0.5D);
 
+            poseStack.mulPose(Axis.YP.rotationDegrees(-facing.toYRot()));
+
             poseStack.translate((i - 1) * 0.3D, 0.0D, 0.0D);
-
             poseStack.mulPose(Axis.XP.rotationDegrees(90));
-
-            poseStack.scale(1F, 1F, 1F);
+            poseStack.scale(0.6F, 0.6F, 0.6F);
 
             this.itemRenderer.renderStatic(
                     stack,

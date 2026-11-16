@@ -3,12 +3,14 @@ package com.FrogPlay.sablemobbreaker.block;
 import com.FrogPlay.sablemobbreaker.SableMobBreaker;
 import com.FrogPlay.sablemobbreaker.item.OxygenTankItem;
 import com.simibubi.create.api.equipment.goggles.IHaveGoggleInformation;
+import com.simibubi.create.foundation.utility.CreateLang;
 import net.minecraft.ChatFormatting;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.Tag;
 import net.minecraft.network.chat.Component;
+import net.minecraft.network.protocol.game.ClientboundBlockEntityDataPacket;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.block.entity.BlockEntity;
@@ -43,6 +45,7 @@ public class OxygenShelfBlockEntity extends BlockEntity implements IHaveGoggleIn
         protected void onContentsChanged(int slot) {
             setChanged();
             if (level != null && !level.isClientSide) {
+                // Отправляем пакет обновления клиенту
                 level.sendBlockUpdated(worldPosition, getBlockState(), getBlockState(), 3);
             }
         }
@@ -89,8 +92,8 @@ public class OxygenShelfBlockEntity extends BlockEntity implements IHaveGoggleIn
 
     @Override
     public boolean addToGoggleTooltip(List<Component> tooltip, boolean isPlayerSneaking) {
-        tooltip.add(Component.translatable("gui.goggles.energy_storage"));
-        tooltip.add(Component.literal(" " + energyStorage.getEnergyStored() + " FE").withStyle(ChatFormatting.AQUA));
+        CreateLang.translate("gui.goggles.energy_storage").forGoggles(tooltip);
+        CreateLang.number(energyStorage.getEnergyStored()).text(" FE").forGoggles(tooltip, 1);
 
         int tanks = 0;
         for (int i = 0; i < itemHandler.getSlots(); i++) {
@@ -99,10 +102,20 @@ public class OxygenShelfBlockEntity extends BlockEntity implements IHaveGoggleIn
             }
         }
 
-        tooltip.add(Component.literal(""));
         tooltip.add(Component.translatable("tooltip.sablemobbreaker.oxygen_shelf.tanks", tanks, 3).withStyle(ChatFormatting.AQUA));
-
         return true;
+    }
+
+    @Override
+    public CompoundTag getUpdateTag(HolderLookup.Provider registries) {
+        CompoundTag tag = new CompoundTag();
+        saveAdditional(tag, registries);
+        return tag;
+    }
+
+    @Override
+    public ClientboundBlockEntityDataPacket getUpdatePacket() {
+        return ClientboundBlockEntityDataPacket.create(this);
     }
 
     @Override

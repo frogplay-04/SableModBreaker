@@ -2,6 +2,7 @@ package com.FrogPlay.sablemobbreaker.event;
 
 import com.FrogPlay.sablemobbreaker.SableMobBreaker;
 import com.FrogPlay.sablemobbreaker.block.ModBlocks;
+import com.FrogPlay.sablemobbreaker.item.FuelTankItem;
 import com.FrogPlay.sablemobbreaker.item.FuelTankFluidHandler;
 import com.FrogPlay.sablemobbreaker.item.OxygenTankItem;
 import com.FrogPlay.sablemobbreaker.item.PlasmaCutterItem;
@@ -80,6 +81,14 @@ public class WeldingTorchHandler {
         }
     }
 
+    private static class MiningData {
+        BlockPos pos;
+        BlockState state;
+        SubLevel subLevel;
+        float progress;
+    }
+    private static final java.util.Map<UUID, MiningData> MINING_DATA = new ConcurrentHashMap<>();
+
     @SubscribeEvent
     public static void registerCapabilities(RegisterCapabilitiesEvent event) {
         event.registerItem(Capabilities.ItemHandler.ITEM,
@@ -103,6 +112,7 @@ public class WeldingTorchHandler {
         Player player = event.getEntity();
         if (player.level().isClientSide()) return;
 
+        // Таймер взрыва (Fuse)
         for (int i = 0; i < player.getInventory().getContainerSize(); i++) {
             ItemStack stack = player.getInventory().getItem(i);
             if (stack.getItem() instanceof WeldingTorchItem || stack.getItem() instanceof PlasmaCutterItem) {
@@ -128,6 +138,7 @@ public class WeldingTorchHandler {
         ItemStack mainHand = player.getMainHandItem();
         Level level = player.level();
 
+        // === СВАРОЧНЫЙ АППАРАТ ===
         if (mainHand.getItem() instanceof WeldingTorchItem && WeldingTorchItem.isOn(mainHand)) {
             ItemStack bottle = WeldingTorchItem.getBottle(mainHand);
             int fuel = getFuelAmount(bottle);
@@ -213,7 +224,7 @@ public class WeldingTorchHandler {
         if (mainHand.getItem() instanceof PlasmaCutterItem && PlasmaCutterItem.isOn(mainHand)) {
             ItemStack bottle = PlasmaCutterItem.getBottle(mainHand);
 
-            if (bottle.getItem() instanceof com.FrogPlay.sablemobbreaker.item.FuelTankItem || getFuelAmount(bottle) > 0) {
+            if (bottle.getItem() instanceof FuelTankItem || getFuelAmount(bottle) > 0) {
                 level.explode(null, player.getX(), player.getY() + 0.5, player.getZ(), 3.0f, Level.ExplosionInteraction.BLOCK);
                 mainHand.shrink(1);
                 player.hurt(player.damageSources().explosion(null), 10.0f);
@@ -238,56 +249,95 @@ public class WeldingTorchHandler {
                 }
             }
 
-            if (player.tickCount % 10 == 0) {
-                Vec3 eyePos = player.getEyePosition();
-                Vec3 lookVec = player.getLookAngle();
-                Vec3 targetVec = eyePos.add(lookVec.scale(4.5));
+            Vec3 eyePos = player.getEyePosition();
+            Vec3 lookVec = player.getLookAngle();
+            Vec3 targetVec = eyePos.add(lookVec.scale(4.5));
 
-                ClipContext clipContext = new ClipContext(eyePos, targetVec, ClipContext.Block.OUTLINE, ClipContext.Fluid.NONE, player);
-                BlockHitResult hitResult = level.clip(clipContext);
+            boolean hitSomething = false;
+            MiningData data = MINING_DATA.computeIfAbsent(player.getUUID(), k -> new MiningData());
 
-                if (hitResult.getType() == HitResult.Type.BLOCK) {
-                    BlockPos hitPos = hitResult.getBlockPos();
-                    BlockState hitState = level.getBlockState(hitPos);
+            ClipContext clipContext = new ClipContext(eyePos, targetVec, ClipContext.Block.OUTLINE, ClipContext.Fluid.NONE, player);
+            BlockHitResult hitResult = level.clip(clipContext);
 
-                    if (!hitState.isAir() && hitState.getDestroySpeed(level, hitPos) >= 0) {
-                        // Проверка на воду (все 6 сторон должны быть не воздухом)
+            if (hitResult.getType() == HitResult.Type.BLOCK) {
+                BlockPos hitPos = hitResult.getBlockPos();
+                BlockState hitState = level.getBlockState(hitPos);
+
+                if (!hitState.isAir() && hitState.getDestroySpeed(level, hitPos) >= 0) {
+                    if (!hitPos.equals(data.pos)) {
+                        data.pos = hitPos;
+                        data.state = hitState;
+                        data.subLevel = null;
+                        data.progress = 0;
+                    }
+                    hitSomething = true;
+                }
+            }
+            else {
+                SubLevelContainer container = SubLevelContainer.getContainer(level);
+                if (container != null) {
+                    for (SubLevel sl : container.getAllSubLevels()) {
+                        if (sl.isRemoved()) continue;
+                        if (sl.boundingBox().contains(targetVec.x, targetVec.y, targetVec.z)) {
+                            if (data.subLevel != sl || data.pos == null || !data.pos.equals(BlockPos.containing(targetVec))) {
+                                data.subLevel = sl;
+                                data.pos = BlockPos.containing(targetVec);
+                                data.progress = 0;
+                            }
+                            hitSomething = true;
+                            break;
+                        }
+                    }
+                }
+            }
+
+            if (hitSomething) {
+                float speed = 7.0F;
+                if (data.subLevel != null) {
+                    data.progress += speed / 2.0F / 30.0F;
+                    if (data.progress >= 1.0F) {
+                        SubLevelDamageHelper.damageBlockExact(level, data.subLevel, targetVec, 9999);
+                        data.progress = 0;
+                        OxygenTankItem.setAir(bottle, air - 10);
+                        PlasmaCutterItem.setBottle(mainHand, bottle);
+                    }
+                } else if (data.state != null) {
+                    float hardness = data.state.getDestroySpeed(level, data.pos);
+                    if (hardness > 0) {
+                        data.progress += speed / hardness / 30.0F;
+                    } else {
+                        data.progress = 1.0F;
+                    }
+
+                    if (data.progress >= 1.0F) {
                         boolean isUnderwater = true;
                         for (Direction dir : Direction.values()) {
-                            if (level.getBlockState(hitPos.relative(dir)).isAir()) {
+                            if (level.getBlockState(data.pos.relative(dir)).isAir()) {
                                 isUnderwater = false;
                                 break;
                             }
                         }
 
                         if (isUnderwater) {
-                            level.setBlockAndUpdate(hitPos, Blocks.WATER.defaultBlockState());
-                            level.playSound(null, hitPos, SoundEvents.FIRE_EXTINGUISH, SoundSource.BLOCKS, 1.0f, 1.0f);
+                            level.destroyBlock(data.pos, true, player);
+                            level.setBlockAndUpdate(data.pos, Blocks.WATER.defaultBlockState());
+                            level.playSound(null, data.pos, SoundEvents.FIRE_EXTINGUISH, SoundSource.BLOCKS, 1.0f, 1.0f);
                         } else {
-                            level.destroyBlock(hitPos, true, player);
+                            level.destroyBlock(data.pos, true, player);
                         }
 
+                        data.progress = 0;
                         OxygenTankItem.setAir(bottle, air - 10);
                         PlasmaCutterItem.setBottle(mainHand, bottle);
-                        return;
                     }
                 }
-
-                SubLevelContainer container = SubLevelContainer.getContainer(level);
-                if (container != null) {
-                    for (SubLevel sl : container.getAllSubLevels()) {
-                        if (sl.isRemoved()) continue;
-                        if (sl.boundingBox().contains(targetVec.x, targetVec.y, targetVec.z)) {
-                            if (SubLevelDamageHelper.damageBlockExact(level, sl, targetVec, 9999)) {
-                                OxygenTankItem.setAir(bottle, air - 10);
-                                PlasmaCutterItem.setBottle(mainHand, bottle);
-                                level.playSound(null, player.getX(), player.getY(), player.getZ(), SoundEvents.FIRE_AMBIENT, SoundSource.PLAYERS, 0.5f, 2.0f);
-                                break;
-                            }
-                        }
-                    }
-                }
+            } else {
+                data.progress = 0;
+                data.pos = null;
+                data.subLevel = null;
             }
+        } else {
+            MINING_DATA.remove(player.getUUID());
         }
     }
 

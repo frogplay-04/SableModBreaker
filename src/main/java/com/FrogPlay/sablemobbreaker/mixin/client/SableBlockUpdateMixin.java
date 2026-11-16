@@ -1,6 +1,5 @@
 package com.FrogPlay.sablemobbreaker.mixin.client;
 
-import com.FrogPlay.sablemobbreaker.SableMobBreaker;
 import dev.ryanhcode.sable.api.sublevel.ClientSubLevelContainer;
 import dev.ryanhcode.sable.api.sublevel.SubLevelContainer;
 import dev.ryanhcode.sable.sublevel.ClientSubLevel;
@@ -26,27 +25,15 @@ public class SableBlockUpdateMixin {
         if (level == null) return;
 
         BlockPos pos = packet.getPos();
-        String tag = "[SMB CLIENT]";
-        SableMobBreaker.LOGGER.info("{} handleBlockUpdate pos={}", tag, pos);
-
         ClientSubLevelContainer container = SubLevelContainer.getContainer(level);
-        if (container == null) {
-            SableMobBreaker.LOGGER.warn("{} container == null", tag);
-            return;
-        }
+        if (container == null) return;
 
         ChunkPos chunkPos = new ChunkPos(pos);
         LevelPlot plot = container.getPlot(chunkPos);
-        if (plot == null) {
-            SableMobBreaker.LOGGER.warn("{} plot == null for {}", tag, chunkPos);
-            return;
-        }
+        if (plot == null) return;
 
         SubLevel subLevel = plot.getSubLevel();
-        if (!(subLevel instanceof ClientSubLevel clientSubLevel)) {
-            SableMobBreaker.LOGGER.warn("{} not ClientSubLevel", tag);
-            return;
-        }
+        if (!(subLevel instanceof ClientSubLevel clientSubLevel)) return;
 
         int sx = pos.getX() >> 4;
         int sy = pos.getY() >> 4;
@@ -54,16 +41,7 @@ public class SableBlockUpdateMixin {
 
         try {
             clientSubLevel.getRenderData().setDirty(sx, sy, sz, true);
-            SableMobBreaker.LOGGER.info("{} method=ClientSubLevel.getRenderData().setDirty OK", tag);
-        } catch (Throwable t) {
-            SableMobBreaker.LOGGER.error("{} method=setDirty FAIL {}", tag, t.toString());
-        }
-
-        try {
             Minecraft.getInstance().levelRenderer.setSectionDirty(sx, sy, sz);
-            SableMobBreaker.LOGGER.info("{} method=levelRenderer.setSectionDirty OK", tag);
-        } catch (Throwable t) {
-            SableMobBreaker.LOGGER.error("{} method=levelRenderer.setSectionDirty FAIL {}", tag, t.toString());
-        }
+        } catch (Throwable ignored) {}
     }
 }
