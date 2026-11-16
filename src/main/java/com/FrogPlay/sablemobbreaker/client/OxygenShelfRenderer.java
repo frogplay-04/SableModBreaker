@@ -26,17 +26,20 @@ public class OxygenShelfRenderer implements BlockEntityRenderer<OxygenShelfBlock
     @Override
     public void render(@NotNull OxygenShelfBlockEntity blockEntity, float partialTick, @NotNull PoseStack poseStack, @NotNull MultiBufferSource buffer, int packedLight, int packedOverlay) {
         Direction facing = blockEntity.getBlockState().getValue(OxygenShelfBlock.FACING);
+
         for (int i = 0; i < 3; i++) {
             ItemStack stack = blockEntity.getItemHandler().getStackInSlot(i);
             if (stack.isEmpty()) continue;
 
             poseStack.pushPose();
 
-            poseStack.translate(0.5D, 0.125D, 0.5D);
+            poseStack.translate(0.5D, 0.1875D, 0.5D);
 
             poseStack.mulPose(Axis.YP.rotationDegrees(-facing.toYRot()));
 
-            poseStack.translate((i - 1) * 0.35D, 0.0D, 0.25D);
+            poseStack.translate((i - 1) * 0.3125D, 0.0D, 0.3125D);
+
+            poseStack.scale(1.0F, 1.0F, 1.0F);
 
             this.itemRenderer.renderStatic(
                     stack,
