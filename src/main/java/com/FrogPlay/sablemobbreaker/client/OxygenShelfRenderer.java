@@ -34,13 +34,12 @@ public class OxygenShelfRenderer implements BlockEntityRenderer<OxygenShelfBlock
 
             poseStack.pushPose();
 
-            poseStack.translate(0.5D, 0.2D, 0.5D);
+            poseStack.translate(0.5D, 0.5D, 0.5D);
 
             poseStack.mulPose(Axis.YP.rotationDegrees(-facing.toYRot()));
 
-            poseStack.translate((i - 1) * 0.3D, 0.0D, -0.15D);
+            poseStack.translate((1 - i) * 0.33D, 0.0D, 0.0D);
 
-            poseStack.scale(1F, 1F, 1F);
 
             this.itemRenderer.renderStatic(
                     stack,

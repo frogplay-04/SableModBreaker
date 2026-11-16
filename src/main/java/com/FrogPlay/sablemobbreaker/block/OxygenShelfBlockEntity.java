@@ -90,10 +90,10 @@ public class OxygenShelfBlockEntity extends BlockEntity implements IHaveGoggleIn
 
     @Override
     public boolean addToGoggleTooltip(List<Component> tooltip, boolean isPlayerSneaking) {
-        tooltip.add(Component.translatable("tooltip.sablemobbreaker.energy").withStyle(ChatFormatting.GRAY));
+        tooltip.add(Component.literal("  ").append(Component.translatable("tooltip.sablemobbreaker.energy")).withStyle(ChatFormatting.GRAY));
 
         String energyStr = String.format("%,d", energyStorage.getEnergyStored());
-        tooltip.add(Component.literal(" " + energyStr + " FE").withStyle(ChatFormatting.AQUA));
+        tooltip.add(Component.literal("  " + energyStr + " FE").withStyle(ChatFormatting.AQUA));
 
         int tanks = 0;
         for (int i = 0; i < itemHandler.getSlots(); i++) {
@@ -103,7 +103,7 @@ public class OxygenShelfBlockEntity extends BlockEntity implements IHaveGoggleIn
         }
 
         tooltip.add(Component.literal(""));
-        tooltip.add(Component.translatable("tooltip.sablemobbreaker.oxygen_shelf.tanks", tanks, 3).withStyle(ChatFormatting.AQUA));
+        tooltip.add(Component.literal("  ").append(Component.translatable("tooltip.sablemobbreaker.oxygen_shelf.tanks", tanks, 3)).withStyle(ChatFormatting.AQUA));
 
         return true;
     }
