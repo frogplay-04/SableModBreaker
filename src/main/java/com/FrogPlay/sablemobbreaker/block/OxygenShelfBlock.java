@@ -25,7 +25,6 @@ import net.neoforged.neoforge.items.ItemStackHandler;
 import org.jetbrains.annotations.Nullable;
 
 public class OxygenShelfBlock extends Block implements EntityBlock {
-
     public static final DirectionProperty FACING = BlockStateProperties.HORIZONTAL_FACING;
 
     public OxygenShelfBlock(Properties properties) {
@@ -70,9 +69,7 @@ public class OxygenShelfBlock extends Block implements EntityBlock {
     protected ItemInteractionResult useItemOn(ItemStack stack, BlockState state, Level level, BlockPos pos, Player player, InteractionHand hand, BlockHitResult hitResult) {
         if (level.getBlockEntity(pos) instanceof OxygenShelfBlockEntity be) {
             ItemStackHandler handler = be.getItemHandler();
-
             if (level.isClientSide) return ItemInteractionResult.SUCCESS;
-
             if (stack.getItem() instanceof com.FrogPlay.sablemobbreaker.item.OxygenTankItem) {
                 for (int i = 0; i < handler.getSlots(); i++) {
                     if (handler.getStackInSlot(i).isEmpty()) {
@@ -92,14 +89,13 @@ public class OxygenShelfBlock extends Block implements EntityBlock {
     protected InteractionResult useWithoutItem(BlockState state, Level level, BlockPos pos, Player player, BlockHitResult hitResult) {
         if (level.getBlockEntity(pos) instanceof OxygenShelfBlockEntity be) {
             ItemStackHandler handler = be.getItemHandler();
-
             if (level.isClientSide) return InteractionResult.SUCCESS;
-
             for (int i = 0; i < handler.getSlots(); i++) {
-                ItemStack slotStack = handler.getStackInSlot(i);
-                if (!slotStack.isEmpty()) {
-                    player.getInventory().placeItemBackInInventory(slotStack);
-                    handler.setStackInSlot(i, ItemStack.EMPTY);
+                if (!handler.getStackInSlot(i).isEmpty()) {
+                    ItemStack extracted = handler.extractItem(i, 1, false);
+                    if (!player.getInventory().add(extracted)) {
+                        player.drop(extracted, false);
+                    }
                     return InteractionResult.SUCCESS;
                 }
             }

@@ -71,14 +71,19 @@ public class OxygenShelfBlockEntity extends BlockEntity implements IHaveGoggleIn
         for (int i = 0; i < itemHandler.getSlots(); i++) {
             ItemStack stack = itemHandler.getStackInSlot(i);
             if (stack.isEmpty() || !(stack.getItem() instanceof OxygenTankItem)) continue;
+
             int currentAir = OxygenTankItem.getAir(stack);
             if (currentAir >= OxygenTankItem.MAX_AIR) continue;
+
             int airNeeded = OxygenTankItem.MAX_AIR - currentAir;
             int energyNeeded = airNeeded * FE_PER_AIR;
             int energyAvailable = energyStorage.extractEnergy(energyNeeded, true);
+
             if (energyAvailable < FE_PER_AIR) continue;
+
             int airToAdd = Math.min(airNeeded, energyAvailable / FE_PER_AIR);
             int energyToUse = airToAdd * FE_PER_AIR;
+
             energyStorage.extractEnergy(energyToUse, false);
             OxygenTankItem.setAir(stack, currentAir + airToAdd);
             itemHandler.setStackInSlot(i, stack);
@@ -111,10 +116,10 @@ public class OxygenShelfBlockEntity extends BlockEntity implements IHaveGoggleIn
 
     @Override
     public boolean addToGoggleTooltip(List<Component> tooltip, boolean isPlayerSneaking) {
-        tooltip.add(Component.literal("    \u00A0").append(Component.translatable("block.sablemobbreaker.oxygen_shelf.tooltip.energy")).withStyle(ChatFormatting.GRAY));
+        tooltip.add(Component.literal("    ").append(Component.translatable("block.sablemobbreaker.oxygen_shelf.tooltip.energy")).withStyle(ChatFormatting.GRAY));
         tooltip.add(Component.literal("    ").append(Component.literal(energyStorage.getEnergyStored() + " / " + energyStorage.getMaxEnergyStored() + " FE")).withStyle(ChatFormatting.AQUA));
 
-        tooltip.add(Component.literal("    \u00A0").append(Component.translatable("block.sablemobbreaker.oxygen_shelf.tooltip.tanks")).withStyle(ChatFormatting.GRAY));
+        tooltip.add(Component.literal("    ").append(Component.translatable("block.sablemobbreaker.oxygen_shelf.tooltip.tanks")).withStyle(ChatFormatting.GRAY));
 
         int filledTanks = 0;
         for (int i = 0; i < itemHandler.getSlots(); i++) {
@@ -123,6 +128,7 @@ public class OxygenShelfBlockEntity extends BlockEntity implements IHaveGoggleIn
             }
         }
         tooltip.add(Component.literal("    ").append(Component.literal(filledTanks + " / 3")).withStyle(ChatFormatting.GREEN));
+
         return true;
     }
 }
