@@ -26,6 +26,6 @@
   "tooltip.sablemobbreaker.welding_torch.danger.oxygen": "⚠ ОПАСНО! Кислород взорвётся",
   "tooltip.sablemobbreaker.welding_torch.danger.fuel": "⚠ ОПАСНО! Топливо взорвётся",
   "tooltip.sablemobbreaker.welding_torch.fuel": "Топливо: %s / %s",
-  "gui.goggles.energy_storage": "Энергия:",
+  "tooltip.sablemobbreaker.energy": "Энергия:",
   "tooltip.sablemobbreaker.oxygen_shelf.tanks": "Баллонов: %s / %s"
 }

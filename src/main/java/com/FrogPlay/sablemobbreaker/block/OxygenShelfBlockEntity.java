@@ -3,7 +3,6 @@ package com.FrogPlay.sablemobbreaker.block;
 import com.FrogPlay.sablemobbreaker.SableMobBreaker;
 import com.FrogPlay.sablemobbreaker.item.OxygenTankItem;
 import com.simibubi.create.api.equipment.goggles.IHaveGoggleInformation;
-import com.simibubi.create.foundation.utility.CreateLang;
 import net.minecraft.ChatFormatting;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.HolderLookup;
@@ -45,7 +44,6 @@ public class OxygenShelfBlockEntity extends BlockEntity implements IHaveGoggleIn
         protected void onContentsChanged(int slot) {
             setChanged();
             if (level != null && !level.isClientSide) {
-                // Отправляем пакет обновления клиенту
                 level.sendBlockUpdated(worldPosition, getBlockState(), getBlockState(), 3);
             }
         }
@@ -92,8 +90,10 @@ public class OxygenShelfBlockEntity extends BlockEntity implements IHaveGoggleIn
 
     @Override
     public boolean addToGoggleTooltip(List<Component> tooltip, boolean isPlayerSneaking) {
-        CreateLang.translate("gui.goggles.energy_storage").forGoggles(tooltip);
-        CreateLang.number(energyStorage.getEnergyStored()).text(" FE").forGoggles(tooltip, 1);
+        tooltip.add(Component.translatable("tooltip.sablemobbreaker.energy").withStyle(ChatFormatting.GRAY));
+
+        String energyStr = String.format("%,d", energyStorage.getEnergyStored());
+        tooltip.add(Component.literal(" " + energyStr + " FE").withStyle(ChatFormatting.AQUA));
 
         int tanks = 0;
         for (int i = 0; i < itemHandler.getSlots(); i++) {
@@ -102,7 +102,9 @@ public class OxygenShelfBlockEntity extends BlockEntity implements IHaveGoggleIn
             }
         }
 
+        tooltip.add(Component.literal(""));
         tooltip.add(Component.translatable("tooltip.sablemobbreaker.oxygen_shelf.tanks", tanks, 3).withStyle(ChatFormatting.AQUA));
+
         return true;
     }
 
