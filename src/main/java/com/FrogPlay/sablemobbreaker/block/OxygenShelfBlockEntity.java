@@ -7,7 +7,6 @@ import net.minecraft.ChatFormatting;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.nbt.CompoundTag;
-import net.minecraft.nbt.Tag;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.protocol.game.ClientboundBlockEntityDataPacket;
 import net.minecraft.resources.ResourceLocation;
@@ -16,11 +15,9 @@ import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
 import net.neoforged.neoforge.energy.EnergyStorage;
 import net.neoforged.neoforge.items.ItemStackHandler;
-
 import java.util.List;
 
 public class OxygenShelfBlockEntity extends BlockEntity implements IHaveGoggleInformation {
-
     private static final ResourceLocation OXYGEN_TANK_ID = ResourceLocation.fromNamespaceAndPath(SableMobBreaker.MOD_ID, "oxygen_tank");
     private static final int FE_PER_AIR = 100;
 
@@ -31,6 +28,7 @@ public class OxygenShelfBlockEntity extends BlockEntity implements IHaveGoggleIn
             if (received > 0 && !simulate) setChanged();
             return received;
         }
+
         @Override
         public int extractEnergy(int maxExtract, boolean simulate) {
             int extracted = super.extractEnergy(maxExtract, simulate);
@@ -60,28 +58,27 @@ public class OxygenShelfBlockEntity extends BlockEntity implements IHaveGoggleIn
         super(ModBlockEntities.OXYGEN_SHELF_ENTITY.get(), pos, state);
     }
 
-    public EnergyStorage getEnergyStorage() { return energyStorage; }
-    public ItemStackHandler getItemHandler() { return itemHandler; }
+    public EnergyStorage getEnergyStorage() {
+        return energyStorage;
+    }
+
+    public ItemStackHandler getItemHandler() {
+        return itemHandler;
+    }
 
     public void tick() {
         if (level == null || level.isClientSide) return;
-
         for (int i = 0; i < itemHandler.getSlots(); i++) {
             ItemStack stack = itemHandler.getStackInSlot(i);
             if (stack.isEmpty() || !(stack.getItem() instanceof OxygenTankItem)) continue;
-
             int currentAir = OxygenTankItem.getAir(stack);
             if (currentAir >= OxygenTankItem.MAX_AIR) continue;
-
             int airNeeded = OxygenTankItem.MAX_AIR - currentAir;
             int energyNeeded = airNeeded * FE_PER_AIR;
-
             int energyAvailable = energyStorage.extractEnergy(energyNeeded, true);
             if (energyAvailable < FE_PER_AIR) continue;
-
             int airToAdd = Math.min(airNeeded, energyAvailable / FE_PER_AIR);
             int energyToUse = airToAdd * FE_PER_AIR;
-
             energyStorage.extractEnergy(energyToUse, false);
             OxygenTankItem.setAir(stack, currentAir + airToAdd);
             itemHandler.setStackInSlot(i, stack);
@@ -89,30 +86,17 @@ public class OxygenShelfBlockEntity extends BlockEntity implements IHaveGoggleIn
     }
 
     @Override
-    public boolean addToGoggleTooltip(List<Component> tooltip, boolean isPlayerSneaking) {
-        tooltip.add(Component.literal("  ").append(Component.translatable("tooltip.sablemobbreaker.energy")).withStyle(ChatFormatting.GRAY));
-
-        String energyStr = String.format("%,d", energyStorage.getEnergyStored());
-        tooltip.add(Component.literal("  " + energyStr + " FE").withStyle(ChatFormatting.AQUA));
-
-        int tanks = 0;
-        for (int i = 0; i < itemHandler.getSlots(); i++) {
-            if (itemHandler.getStackInSlot(i).getItem() instanceof OxygenTankItem) {
-                tanks++;
-            }
-        }
-
-        tooltip.add(Component.literal(""));
-        tooltip.add(Component.literal("  ").append(Component.translatable("tooltip.sablemobbreaker.oxygen_shelf.tanks", tanks, 3)).withStyle(ChatFormatting.AQUA));
-
-        return true;
+    protected void saveAdditional(CompoundTag tag, HolderLookup.Provider registries) {
+        super.saveAdditional(tag, registries);
+        tag.put("energy", energyStorage.serializeNBT(registries));
+        tag.put("inventory", itemHandler.serializeNBT(registries));
     }
 
     @Override
-    public CompoundTag getUpdateTag(HolderLookup.Provider registries) {
-        CompoundTag tag = new CompoundTag();
-        saveAdditional(tag, registries);
-        return tag;
+    protected void loadAdditional(CompoundTag tag, HolderLookup.Provider registries) {
+        super.loadAdditional(tag, registries);
+        energyStorage.deserializeNBT(registries, tag.get("energy"));
+        itemHandler.deserializeNBT(registries, tag.getCompound("inventory"));
     }
 
     @Override
@@ -121,23 +105,24 @@ public class OxygenShelfBlockEntity extends BlockEntity implements IHaveGoggleIn
     }
 
     @Override
-    protected void saveAdditional(CompoundTag tag, HolderLookup.Provider registries) {
-        super.saveAdditional(tag, registries);
-        tag.put("Energy", energyStorage.serializeNBT(registries));
-        tag.put("Inventory", itemHandler.serializeNBT(registries));
+    public CompoundTag getUpdateTag(HolderLookup.Provider registries) {
+        return saveWithoutMetadata(registries);
     }
 
     @Override
-    protected void loadAdditional(CompoundTag tag, HolderLookup.Provider registries) {
-        super.loadAdditional(tag, registries);
-        if (tag.contains("Energy")) {
-            Tag energyTag = tag.get("Energy");
-            if (energyTag != null) {
-                energyStorage.deserializeNBT(registries, energyTag);
+    public boolean addToGoggleTooltip(List<Component> tooltip, boolean isPlayerSneaking) {
+        tooltip.add(Component.literal("    \u00A0").append(Component.translatable("block.sablemobbreaker.oxygen_shelf.tooltip.energy")).withStyle(ChatFormatting.GRAY));
+        tooltip.add(Component.literal("    ").append(Component.literal(energyStorage.getEnergyStored() + " / " + energyStorage.getMaxEnergyStored() + " FE")).withStyle(ChatFormatting.AQUA));
+
+        tooltip.add(Component.literal("    \u00A0").append(Component.translatable("block.sablemobbreaker.oxygen_shelf.tooltip.tanks")).withStyle(ChatFormatting.GRAY));
+
+        int filledTanks = 0;
+        for (int i = 0; i < itemHandler.getSlots(); i++) {
+            if (!itemHandler.getStackInSlot(i).isEmpty()) {
+                filledTanks++;
             }
         }
-        if (tag.contains("Inventory")) {
-            itemHandler.deserializeNBT(registries, tag.getCompound("Inventory"));
-        }
+        tooltip.add(Component.literal("    ").append(Component.literal(filledTanks + " / 3")).withStyle(ChatFormatting.GREEN));
+        return true;
     }
 }
