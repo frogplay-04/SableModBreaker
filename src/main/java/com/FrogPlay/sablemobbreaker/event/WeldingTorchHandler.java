@@ -42,6 +42,7 @@ import net.minecraft.world.level.block.entity.BlockEntityType;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.chunk.LevelChunk;
 import net.minecraft.world.level.chunk.LevelChunkSection;
+import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.Vec3;
@@ -112,7 +113,6 @@ public class WeldingTorchHandler {
         Player player = event.getEntity();
         if (player.level().isClientSide()) return;
 
-        // Таймер взрыва (Fuse)
         for (int i = 0; i < player.getInventory().getContainerSize(); i++) {
             ItemStack stack = player.getInventory().getItem(i);
             if (stack.getItem() instanceof WeldingTorchItem || stack.getItem() instanceof PlasmaCutterItem) {
@@ -280,8 +280,7 @@ public class WeldingTorchHandler {
                     }
                     hitSomething = true;
                 }
-            }
-            else {
+            } else {
                 SubLevelContainer container = SubLevelContainer.getContainer(level);
                 if (container != null) {
                     for (SubLevel sl : container.getAllSubLevels()) {
@@ -303,6 +302,7 @@ public class WeldingTorchHandler {
                 float speed = 7.0F;
                 if (data.subLevel != null) {
                     data.progress += speed / 2.0F / 30.0F;
+
                     if (data.progress >= 1.0F) {
                         SubLevelDamageHelper.damageBlockExact(level, data.subLevel, targetVec, 9999);
                         data.progress = 0;
@@ -317,7 +317,20 @@ public class WeldingTorchHandler {
                         data.progress = 1.0F;
                     }
 
+                    if (level instanceof ServerLevel serverLevel) {
+                        serverLevel.destroyBlockProgress(player.getId(), data.pos, (int) (data.progress * 10));
+                    }
+
                     if (data.progress >= 1.0F) {
+                        List<LivingEntity> entities = level.getEntitiesOfClass(
+                                LivingEntity.class,
+                                new AABB(data.pos).inflate(1.0),
+                                e -> !(e instanceof Player));
+                        for (LivingEntity mob : entities) {
+                            mob.hurt(player.damageSources().playerAttack(player), 2.0f);
+                            mob.igniteForSeconds(1);
+                        }
+
                         boolean isUnderwater = true;
                         for (Direction dir : Direction.values()) {
                             if (level.getBlockState(data.pos.relative(dir)).isAir()) {
@@ -334,12 +347,19 @@ public class WeldingTorchHandler {
                             level.destroyBlock(data.pos, true, player);
                         }
 
+                        if (level instanceof ServerLevel serverLevel) {
+                            serverLevel.destroyBlockProgress(player.getId(), data.pos, -1);
+                        }
+
                         data.progress = 0;
                         OxygenTankItem.setAir(bottle, air - 10);
                         PlasmaCutterItem.setBottle(mainHand, bottle);
                     }
                 }
             } else {
+                if (data.pos != null && level instanceof ServerLevel serverLevel) {
+                    serverLevel.destroyBlockProgress(player.getId(), data.pos, -1);
+                }
                 data.progress = 0;
                 data.pos = null;
                 data.subLevel = null;

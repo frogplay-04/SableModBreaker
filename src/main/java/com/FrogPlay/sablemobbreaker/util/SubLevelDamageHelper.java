@@ -106,12 +106,31 @@ public class SubLevelDamageHelper {
             if (oldHp <= 0) return false;
             int newHp = BlockHealthManager.damage(id, targetBlock.getX(), targetBlock.getY(), targetBlock.getZ(), oldState, amount, be);
 
+            BlockPos worldBlockPos = BlockPos.containing(
+                    subLevel.logicalPose().transformPosition(
+                            new Vec3(targetBlock.getX() + 0.5, targetBlock.getY() + 0.5, targetBlock.getZ() + 0.5)));
+
+            if (newHp > 0) {
+                int progress = 9 - (int) (((float) newHp / (float) maxHp) * 9);
+                if (progress < 0) progress = 0;
+                if (progress > 9) progress = 9;
+
+                for (ServerPlayer player : serverLevel.players()) {
+                    if (player.distanceToSqr(worldBlockPos.getX(), worldBlockPos.getY(), worldBlockPos.getZ()) < 4096) {
+                        serverLevel.destroyBlockProgress(0, worldBlockPos, progress);
+                    }
+                }
+            } else {
+                // Блок сломан - очищаем трещины
+                for (ServerPlayer player : serverLevel.players()) {
+                    if (player.distanceToSqr(worldBlockPos.getX(), worldBlockPos.getY(), worldBlockPos.getZ()) < 4096) {
+                        serverLevel.destroyBlockProgress(0, worldBlockPos, -1);
+                    }
+                }
+            }
+
             if (newHp <= 0) {
                 try {
-                    BlockPos worldBlockPos = BlockPos.containing(
-                            subLevel.logicalPose().transformPosition(
-                                    new Vec3(targetBlock.getX() + 0.5, targetBlock.getY() + 0.5, targetBlock.getZ() + 0.5)));
-
                     if (!serverLevel.isLoaded(worldBlockPos)) return false;
 
                     BlockState recheck = chunk.getBlockState(targetBlock);
@@ -158,8 +177,7 @@ public class SubLevelDamageHelper {
 
                     BlockHealthManager.setHp(id, targetBlock.getX(), targetBlock.getY(), targetBlock.getZ(), 0);
 
-                    // 3. Синхронизация клиента
-                    ClientboundBlockUpdatePacket packet = new ClientboundBlockUpdatePacket(targetBlock, brokenState);
+                    ClientboundBlockUpdatePacket packet = new ClientboundBlockUpdatePacket(worldBlockPos, brokenState);
                     for (ServerPlayer player : serverLevel.players()) {
                         if (player.distanceToSqr(worldBlockPos.getX(), worldBlockPos.getY(), worldBlockPos.getZ()) < 4096) {
                             player.connection.send(packet);
@@ -228,54 +246,6 @@ public class SubLevelDamageHelper {
             return path.equals("mob_ragdoll_part") || path.equals("ragdoll_part") || path.equals("ragdoll_seat");
         }
         return false;
-    }
-
-    public static boolean isRagdoll(SubLevel subLevel) {
-        if (subLevel == null || subLevel.isRemoved()) return false;
-        try {
-            var box = subLevel.boundingBox();
-            int minChunkX = (int) Math.floor(box.minX()) >> 4;
-            int maxChunkX = (int) Math.floor(box.maxX()) >> 4;
-            int minChunkZ = (int) Math.floor(box.minZ()) >> 4;
-            int maxChunkZ = (int) Math.floor(box.maxZ()) >> 4;
-
-            if ((maxChunkX - minChunkX) > 1 || (maxChunkZ - minChunkZ) > 1) return false;
-
-            try {
-                var server = net.neoforged.neoforge.server.ServerLifecycleHooks.getCurrentServer();
-                if (server == null) return false;
-                for (ServerLevel sl : server.getAllLevels()) {
-                    var container = SubLevelContainer.getContainer(sl);
-                    if (container == null) continue;
-                    boolean foundAnyBlock = false;
-                    for (int cx = minChunkX; cx <= maxChunkX; cx++) {
-                        for (int cz = minChunkZ; cz <= maxChunkZ; cz++) {
-                            ChunkPos cp = new ChunkPos(cx, cz);
-                            if (!container.inBounds(cp)) continue;
-                            LevelChunk chunk = container.getChunk(cp);
-                            if (chunk == null) continue;
-                            int minY = Math.max(sl.getMinBuildHeight(), (int) Math.floor(box.minY()));
-                            int maxY = Math.min(sl.getMaxBuildHeight() - 1, (int) Math.ceil(box.maxY()));
-                            for (int x = 0; x < 16; x++) {
-                                for (int z = 0; z < 16; z++) {
-                                    for (int y = minY; y <= maxY; y++) {
-                                        BlockState st = chunk.getBlockState(new BlockPos(cx * 16 + x, y, cz * 16 + z));
-                                        if (st.isAir()) continue;
-                                        foundAnyBlock = true;
-                                        ResourceLocation id = BuiltInRegistries.BLOCK.getKey(st.getBlock());
-                                        if (!id.getNamespace().equals(RAGDOLL_NAMESPACE)) return false;
-                                    }
-                                }
-                            }
-                        }
-                    }
-                    if (foundAnyBlock) return true;
-                }
-            } catch (Throwable ignored) {}
-            return false;
-        } catch (Throwable t) {
-            return false;
-        }
     }
 
     public static final class RecentBreakTracker {
