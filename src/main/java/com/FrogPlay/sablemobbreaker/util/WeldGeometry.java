@@ -7,23 +7,18 @@ import net.minecraft.world.level.block.DoorBlock;
 import net.minecraft.world.level.block.TrapDoorBlock;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.AABB;
+import net.minecraft.world.phys.Vec3;
 
 import java.util.ArrayDeque;
 import java.util.LinkedHashSet;
 import java.util.Set;
-
-/** Finds a connected door/trapdoor assembly made from the same block type. */
 public final class WeldGeometry {
     public static final int MAX_BLOCKS = 1024;
     private WeldGeometry() {}
 
     public static boolean isEligible(BlockState state) {
-        if (state.getBlock() instanceof DoorBlock) {
-            return !state.is(BlockTags.WOODEN_DOORS);
-        }
-        if (state.getBlock() instanceof TrapDoorBlock) {
-            return !state.is(BlockTags.WOODEN_TRAPDOORS);
-        }
+        if (state.getBlock() instanceof DoorBlock) return !state.is(BlockTags.WOODEN_DOORS);
+        if (state.getBlock() instanceof TrapDoorBlock) return !state.is(BlockTags.WOODEN_TRAPDOORS);
         return false;
     }
 
@@ -31,7 +26,6 @@ public final class WeldGeometry {
         BlockPos origin = start.immutable();
         BlockState first = level.getBlockState(origin);
         if (!isEligible(first)) return Set.of();
-
         Set<BlockPos> found = new LinkedHashSet<>();
         ArrayDeque<BlockPos> queue = new ArrayDeque<>();
         queue.add(origin);
@@ -42,9 +36,7 @@ public final class WeldGeometry {
                 BlockPos next = pos.offset(direction);
                 if (found.contains(next)) continue;
                 BlockState candidate = level.getBlockState(next);
-                if (candidate.getBlock() == first.getBlock() && isEligible(candidate)) {
-                    queue.addLast(next.immutable());
-                }
+                if (candidate.getBlock() == first.getBlock() && isEligible(candidate)) queue.addLast(next.immutable());
             }
         }
         return Set.copyOf(found);
@@ -55,15 +47,38 @@ public final class WeldGeometry {
             new BlockPos(0, 1, 0), new BlockPos(0, -1, 0),
             new BlockPos(0, 0, 1), new BlockPos(0, 0, -1)
     };
-
-    public static AABB bounds(Set<BlockPos> blocks) {
-        if (blocks.isEmpty()) return new AABB(0, 0, 0, 0, 0, 0);
-        int minX = Integer.MAX_VALUE, minY = Integer.MAX_VALUE, minZ = Integer.MAX_VALUE;
-        int maxX = Integer.MIN_VALUE, maxY = Integer.MIN_VALUE, maxZ = Integer.MIN_VALUE;
+    public static AABB bounds(Level level, Set<BlockPos> blocks) {
+        AABB result = null;
         for (BlockPos pos : blocks) {
-            minX = Math.min(minX, pos.getX()); minY = Math.min(minY, pos.getY()); minZ = Math.min(minZ, pos.getZ());
-            maxX = Math.max(maxX, pos.getX() + 1); maxY = Math.max(maxY, pos.getY() + 1); maxZ = Math.max(maxZ, pos.getZ() + 1);
+            BlockState state = level.getBlockState(pos);
+            if (!isEligible(state)) continue;
+            AABB local = state.getShape(level, pos).bounds();
+            if (local.getXsize() < 1.0E-5 || local.getYsize() < 1.0E-5 || local.getZsize() < 1.0E-5) continue;
+            AABB world = local.move(pos);
+            result = result == null ? world : result.minmax(world);
         }
-        return new AABB(minX, minY, minZ, maxX, maxY, maxZ).inflate(0.0125);
+        return result == null ? new AABB(0, 0, 0, 0, 0, 0) : result.inflate(0.004);
+    }
+    public static Vec3[][] visibleContour(AABB b, Vec3 viewer) {
+        Vec3 center = b.getCenter();
+        double dx = viewer.x - center.x, dy = viewer.y - center.y, dz = viewer.z - center.z;
+        double ax = Math.abs(dx), ay = Math.abs(dy), az = Math.abs(dz);
+        int normalAxis = ax >= ay && ax >= az ? 0 : (ay >= ax && ay >= az ? 1 : 2);
+        if (normalAxis == 0) {
+            double x = dx >= 0 ? b.maxX : b.minX;
+            Vec3 a = new Vec3(x, b.minY, b.minZ), c = new Vec3(x, b.maxY, b.minZ);
+            Vec3 d = new Vec3(x, b.maxY, b.maxZ), e = new Vec3(x, b.minY, b.maxZ);
+            return new Vec3[][]{{a,c},{c,d},{d,e},{e,a}};
+        }
+        if (normalAxis == 1) {
+            double y = dy >= 0 ? b.maxY : b.minY;
+            Vec3 a = new Vec3(b.minX,y,b.minZ), c = new Vec3(b.maxX,y,b.minZ);
+            Vec3 d = new Vec3(b.maxX,y,b.maxZ), e = new Vec3(b.minX,y,b.maxZ);
+            return new Vec3[][]{{a,c},{c,d},{d,e},{e,a}};
+        }
+        double z = dz >= 0 ? b.maxZ : b.minZ;
+        Vec3 a = new Vec3(b.minX,b.minY,z), c = new Vec3(b.maxX,b.minY,z);
+        Vec3 d = new Vec3(b.maxX,b.maxY,z), e = new Vec3(b.minX,b.maxY,z);
+        return new Vec3[][]{{a,c},{c,d},{d,e},{e,a}};
     }
 }

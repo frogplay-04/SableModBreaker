@@ -164,8 +164,8 @@ public class ClientEvents {
         var blocks = WeldGeometry.findAssembly(mc.level, hit.getBlockPos());
         if (blocks.isEmpty()) return;
 
-        AABB box = WeldGeometry.bounds(blocks);
-        Vec3[][] edges = weldOutlineEdges(box);
+        AABB box = WeldGeometry.bounds(mc.level, blocks);
+        Vec3[][] edges = WeldGeometry.visibleContour(box, mc.player.getEyePosition());
         VertexConsumer lines = buffer.getBuffer(RenderType.lines());
         Matrix4f matrix = poseStack.last().pose();
         for (Vec3[] edge : edges) {
@@ -176,15 +176,6 @@ public class ClientEvents {
         }
     }
 
-    private static Vec3[][] weldOutlineEdges(AABB b) {
-        Vec3 p000 = new Vec3(b.minX,b.minY,b.minZ), p100 = new Vec3(b.maxX,b.minY,b.minZ);
-        Vec3 p010 = new Vec3(b.minX,b.maxY,b.minZ), p110 = new Vec3(b.maxX,b.maxY,b.minZ);
-        Vec3 p001 = new Vec3(b.minX,b.minY,b.maxZ), p101 = new Vec3(b.maxX,b.minY,b.maxZ);
-        Vec3 p011 = new Vec3(b.minX,b.maxY,b.maxZ), p111 = new Vec3(b.maxX,b.maxY,b.maxZ);
-        return new Vec3[][]{{p000,p100},{p010,p110},{p001,p101},{p011,p111},
-                {p000,p010},{p100,p110},{p001,p011},{p101,p111},
-                {p000,p001},{p100,p101},{p010,p011},{p110,p111}};
-    }
 
     private static void renderCube(PoseStack poseStack, VertexConsumer vc) {
         Matrix4f mat = poseStack.last().pose();
