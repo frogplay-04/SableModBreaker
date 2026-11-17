@@ -23,6 +23,7 @@ import net.minecraft.world.level.chunk.LevelChunk;
 import net.minecraft.world.level.chunk.LevelChunkSection;
 import net.minecraft.world.phys.Vec3;
 import net.neoforged.neoforge.network.PacketDistributor;
+import dev.ryanhcode.sable.companion.math.BoundingBox3dc;
 
 public class SubLevelDamageHelper {
 
@@ -59,7 +60,6 @@ public class SubLevelDamageHelper {
             if (chunk == null || holder == null) return false;
 
             java.util.UUID id = subLevel.getUniqueId();
-            if (id == null) return false;
 
             BlockPos targetBlock = null;
 
@@ -106,12 +106,40 @@ public class SubLevelDamageHelper {
             if (oldHp <= 0) return false;
             int newHp = BlockHealthManager.damage(id, targetBlock.getX(), targetBlock.getY(), targetBlock.getZ(), oldState, amount, be);
 
+            BlockPos worldBlockPos = BlockPos.containing(
+                    subLevel.logicalPose().transformPosition(
+                            new Vec3(targetBlock.getX() + 0.5, targetBlock.getY() + 0.5, targetBlock.getZ() + 0.5)));
+
+            if (newHp > 0) {
+                int progress = 9 - (int) (((float) newHp / (float) maxHp) * 9);
+                if (progress < 0) progress = 0;
+                if (progress > 9) progress = 9;
+
+                boolean hasNearbyPlayer = false;
+                for (ServerPlayer player : serverLevel.players()) {
+                    if (player.distanceToSqr(worldBlockPos.getX(), worldBlockPos.getY(), worldBlockPos.getZ()) < 4096) {
+                        hasNearbyPlayer = true;
+                        break;
+                    }
+                }
+                if (hasNearbyPlayer) {
+                    serverLevel.destroyBlockProgress(0, worldBlockPos, progress);
+                }
+            } else {
+                boolean hasNearbyPlayer = false;
+                for (ServerPlayer player : serverLevel.players()) {
+                    if (player.distanceToSqr(worldBlockPos.getX(), worldBlockPos.getY(), worldBlockPos.getZ()) < 4096) {
+                        hasNearbyPlayer = true;
+                        break;
+                    }
+                }
+                if (hasNearbyPlayer) {
+                    serverLevel.destroyBlockProgress(0, worldBlockPos, -1);
+                }
+            }
+
             if (newHp <= 0) {
                 try {
-                    BlockPos worldBlockPos = BlockPos.containing(
-                            subLevel.logicalPose().transformPosition(
-                                    new Vec3(targetBlock.getX() + 0.5, targetBlock.getY() + 0.5, targetBlock.getZ() + 0.5)));
-
                     if (!serverLevel.isLoaded(worldBlockPos)) return false;
 
                     BlockState recheck = chunk.getBlockState(targetBlock);
@@ -158,7 +186,6 @@ public class SubLevelDamageHelper {
 
                     BlockHealthManager.setHp(id, targetBlock.getX(), targetBlock.getY(), targetBlock.getZ(), 0);
 
-                    // 3. Синхронизация клиента
                     ClientboundBlockUpdatePacket packet = new ClientboundBlockUpdatePacket(targetBlock, brokenState);
                     for (ServerPlayer player : serverLevel.players()) {
                         if (player.distanceToSqr(worldBlockPos.getX(), worldBlockPos.getY(), worldBlockPos.getZ()) < 4096) {
@@ -206,7 +233,6 @@ public class SubLevelDamageHelper {
 
             BlockState state = chunk.getBlockState(centerPos);
             java.util.UUID id = subLevel.getUniqueId();
-            if (id == null) return true;
 
             if (state.isAir() || state.is(ModBlocks.BROKEN_BLOCK.get()) || isIgnoredBlock(state)) {
                 BlockHealthManager.reset(id, centerPos.getX(), centerPos.getY(), centerPos.getZ());
@@ -229,51 +255,124 @@ public class SubLevelDamageHelper {
         }
         return false;
     }
-
     public static boolean isRagdoll(SubLevel subLevel) {
-        if (subLevel == null || subLevel.isRemoved()) return false;
+        if (subLevel == null || subLevel.isRemoved()) {
+            return false;
+        }
+
         try {
-            var box = subLevel.boundingBox();
-            int minChunkX = (int) Math.floor(box.minX()) >> 4;
-            int maxChunkX = (int) Math.floor(box.maxX()) >> 4;
-            int minChunkZ = (int) Math.floor(box.minZ()) >> 4;
-            int maxChunkZ = (int) Math.floor(box.maxZ()) >> 4;
+            var server = net.neoforged.neoforge.server.ServerLifecycleHooks.getCurrentServer();
+            if (server == null) {
+                return false;
+            }
 
-            if ((maxChunkX - minChunkX) > 1 || (maxChunkZ - minChunkZ) > 1) return false;
+            BoundingBox3dc worldBox = subLevel.boundingBox();
 
-            try {
-                var server = net.neoforged.neoforge.server.ServerLifecycleHooks.getCurrentServer();
-                if (server == null) return false;
-                for (ServerLevel sl : server.getAllLevels()) {
-                    var container = SubLevelContainer.getContainer(sl);
-                    if (container == null) continue;
-                    boolean foundAnyBlock = false;
-                    for (int cx = minChunkX; cx <= maxChunkX; cx++) {
-                        for (int cz = minChunkZ; cz <= maxChunkZ; cz++) {
-                            ChunkPos cp = new ChunkPos(cx, cz);
-                            if (!container.inBounds(cp)) continue;
-                            LevelChunk chunk = container.getChunk(cp);
-                            if (chunk == null) continue;
-                            int minY = Math.max(sl.getMinBuildHeight(), (int) Math.floor(box.minY()));
-                            int maxY = Math.min(sl.getMaxBuildHeight() - 1, (int) Math.ceil(box.maxY()));
-                            for (int x = 0; x < 16; x++) {
-                                for (int z = 0; z < 16; z++) {
-                                    for (int y = minY; y <= maxY; y++) {
-                                        BlockState st = chunk.getBlockState(new BlockPos(cx * 16 + x, y, cz * 16 + z));
-                                        if (st.isAir()) continue;
-                                        foundAnyBlock = true;
-                                        ResourceLocation id = BuiltInRegistries.BLOCK.getKey(st.getBlock());
-                                        if (!id.getNamespace().equals(RAGDOLL_NAMESPACE)) return false;
+            double minX = Double.POSITIVE_INFINITY;
+            double minY = Double.POSITIVE_INFINITY;
+            double minZ = Double.POSITIVE_INFINITY;
+            double maxX = Double.NEGATIVE_INFINITY;
+            double maxY = Double.NEGATIVE_INFINITY;
+            double maxZ = Double.NEGATIVE_INFINITY;
+
+            for (int ix = 0; ix <= 1; ix++) {
+                for (int iy = 0; iy <= 1; iy++) {
+                    for (int iz = 0; iz <= 1; iz++) {
+                        Vec3 corner = new Vec3(
+                                ix == 0 ? worldBox.minX() : worldBox.maxX(),
+                                iy == 0 ? worldBox.minY() : worldBox.maxY(),
+                                iz == 0 ? worldBox.minZ() : worldBox.maxZ()
+                        );
+
+                        Vec3 localCorner = subLevel.logicalPose().transformPositionInverse(corner);
+
+                        minX = Math.min(minX, localCorner.x);
+                        minY = Math.min(minY, localCorner.y);
+                        minZ = Math.min(minZ, localCorner.z);
+                        maxX = Math.max(maxX, localCorner.x);
+                        maxY = Math.max(maxY, localCorner.y);
+                        maxZ = Math.max(maxZ, localCorner.z);
+                    }
+                }
+            }
+
+            int minBlockX = (int) Math.floor(minX);
+            int minBlockY = (int) Math.floor(minY);
+            int minBlockZ = (int) Math.floor(minZ);
+            int maxBlockX = (int) Math.floor(maxX);
+            int maxBlockY = (int) Math.floor(maxY);
+            int maxBlockZ = (int) Math.floor(maxZ);
+
+            int minChunkX = minBlockX >> 4;
+            int maxChunkX = maxBlockX >> 4;
+            int minChunkZ = minBlockZ >> 4;
+            int maxChunkZ = maxBlockZ >> 4;
+
+            if ((maxChunkX - minChunkX) > 1 || (maxChunkZ - minChunkZ) > 1) {
+                return false;
+            }
+
+            for (ServerLevel serverLevel : server.getAllLevels()) {
+                boolean foundAnyBlock = false;
+                boolean foundRagdollBlock = false;
+                SubLevelContainer container = SubLevelContainer.getContainer(serverLevel);
+                if (container == null) {
+                    continue;
+                }
+
+                int scanMinY = Math.max(serverLevel.getMinBuildHeight(), minBlockY);
+                int scanMaxY = Math.min(serverLevel.getMaxBuildHeight() - 1, maxBlockY);
+                if (scanMinY > scanMaxY) {
+                    continue;
+                }
+
+                for (int cx = minChunkX; cx <= maxChunkX; cx++) {
+                    for (int cz = minChunkZ; cz <= maxChunkZ; cz++) {
+                        ChunkPos chunkPos = new ChunkPos(cx, cz);
+                        if (!container.inBounds(chunkPos)) {
+                            continue;
+                        }
+
+                        LevelChunk chunk = container.getChunk(chunkPos);
+                        if (chunk == null) {
+                            continue;
+                        }
+
+                        int fromX = Math.max(minBlockX, cx << 4);
+                        int toX = Math.min(maxBlockX, (cx << 4) + 15);
+                        int fromZ = Math.max(minBlockZ, cz << 4);
+                        int toZ = Math.min(maxBlockZ, (cz << 4) + 15);
+
+                        for (int x = fromX; x <= toX; x++) {
+                            for (int z = fromZ; z <= toZ; z++) {
+                                for (int y = scanMinY; y <= scanMaxY; y++) {
+                                    BlockState state = chunk.getBlockState(new BlockPos(x, y, z));
+                                    if (state.isAir()) {
+                                        continue;
+                                    }
+
+                                    foundAnyBlock = true;
+                                    ResourceLocation blockId = BuiltInRegistries.BLOCK.getKey(state.getBlock());
+
+                                    if (RAGDOLL_NAMESPACE.equals(blockId.getNamespace())) {
+                                        foundRagdollBlock = true;
+                                    } else {
+                                        return false;
                                     }
                                 }
                             }
                         }
                     }
-                    if (foundAnyBlock) return true;
                 }
-            } catch (Throwable ignored) {}
+
+                if (foundAnyBlock) {
+                    return foundRagdollBlock;
+                }
+            }
+
             return false;
-        } catch (Throwable t) {
+        } catch (RuntimeException exception) {
+            SableMobBreaker.LOGGER.warn("[SMB] Не удалось определить ragdoll SubLevel", exception);
             return false;
         }
     }

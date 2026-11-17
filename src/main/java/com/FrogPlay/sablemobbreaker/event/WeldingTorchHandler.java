@@ -86,7 +86,9 @@ public class WeldingTorchHandler {
         BlockPos pos;
         BlockState state;
         SubLevel subLevel;
+        BlockPos subLevelLocalPos;
         float progress;
+        float subLevelDamageRemainder;
     }
     private static final java.util.Map<UUID, MiningData> MINING_DATA = new ConcurrentHashMap<>();
 
@@ -272,11 +274,15 @@ public class WeldingTorchHandler {
                 BlockState hitState = level.getBlockState(hitPos);
 
                 if (!hitState.isAir() && hitState.getDestroySpeed(level, hitPos) >= 0) {
-                    if (!hitPos.equals(data.pos)) {
-                        data.pos = hitPos;
+                    if (!hitPos.equals(data.pos) || data.subLevel != null) {
+                        data.pos = hitPos.immutable();
                         data.state = hitState;
                         data.subLevel = null;
-                        data.progress = 0;
+                        data.subLevelLocalPos = null;
+                        data.progress = 0.0F;
+                        data.subLevelDamageRemainder = 0.0F;
+                    } else {
+                        data.state = hitState;
                     }
                     hitSomething = true;
                 }
@@ -284,41 +290,110 @@ public class WeldingTorchHandler {
                 SubLevelContainer container = SubLevelContainer.getContainer(level);
                 if (container != null) {
                     for (SubLevel sl : container.getAllSubLevels()) {
-                        if (sl.isRemoved()) continue;
-                        if (sl.boundingBox().contains(targetVec.x, targetVec.y, targetVec.z)) {
-                            if (data.subLevel != sl || data.pos == null || !data.pos.equals(BlockPos.containing(targetVec))) {
-                                data.subLevel = sl;
-                                data.pos = BlockPos.containing(targetVec);
-                                data.progress = 0;
-                            }
-                            hitSomething = true;
-                            break;
+                        if (sl.isRemoved() || !sl.boundingBox().contains(targetVec.x, targetVec.y, targetVec.z)) {
+                            continue;
                         }
+
+                        Vec3 localVec = sl.logicalPose().transformPositionInverse(targetVec);
+                        BlockPos localBlockPos = BlockPos.containing(localVec.x, localVec.y, localVec.z);
+                        ChunkPos chunkPos = new ChunkPos(localBlockPos.getX() >> 4, localBlockPos.getZ() >> 4);
+                        if (!container.inBounds(chunkPos)) continue;
+
+                        LevelChunk subLevelChunk = container.getChunk(chunkPos);
+                        if (subLevelChunk == null) continue;
+
+                        BlockState subLevelState = subLevelChunk.getBlockState(localBlockPos);
+                        if (subLevelState.isAir() || subLevelState.is(ModBlocks.BROKEN_BLOCK.get())
+                                || SubLevelDamageHelper.isIgnoredBlock(subLevelState)
+                                || subLevelState.getDestroySpeed(subLevelChunk, localBlockPos) < 0.0F) {
+                            continue;
+                        }
+
+                        boolean changedTarget = data.subLevel != sl
+                                || data.subLevelLocalPos == null
+                                || !data.subLevelLocalPos.equals(localBlockPos);
+                        if (changedTarget) {
+                            data.subLevel = sl;
+                            data.subLevelLocalPos = localBlockPos.immutable();
+                            data.pos = BlockPos.containing(targetVec);
+                            data.state = subLevelState;
+                            data.progress = 0.0F;
+                            data.subLevelDamageRemainder = 0.0F;
+                        } else {
+                            data.state = subLevelState;
+                        }
+
+                        hitSomething = true;
+                        break;
                     }
                 }
             }
 
-            if (hitSomething) {
-                float speed = 7.0F;
-                if (data.subLevel != null) {
-                    data.progress += speed / 2.0F / 30.0F;
+            if (hitSomething && data.state != null) {
+                if (data.subLevel != null && data.subLevelLocalPos != null) {
+                    SubLevelContainer container = SubLevelContainer.getContainer(level);
+                    if (container != null) {
+                        ChunkPos chunkPos = new ChunkPos(data.subLevelLocalPos.getX() >> 4,
+                                data.subLevelLocalPos.getZ() >> 4);
+                        LevelChunk subLevelChunk = container.inBounds(chunkPos)
+                                ? container.getChunk(chunkPos) : null;
 
-                    if (data.progress >= 1.0F) {
-                        SubLevelDamageHelper.damageBlockExact(level, data.subLevel, targetVec, 9999);
-                        data.progress = 0;
-                        OxygenTankItem.setAir(bottle, air - 10);
-                        PlasmaCutterItem.setBottle(mainHand, bottle);
-                    }
-                } else if (data.state != null) {
-                    float hardness = data.state.getDestroySpeed(level, data.pos);
-                    if (hardness > 0) {
-                        data.progress += speed / hardness / 30.0F;
+                        if (subLevelChunk != null) {
+                            BlockState currentState = subLevelChunk.getBlockState(data.subLevelLocalPos);
+                            if (currentState.isAir() || currentState.is(ModBlocks.BROKEN_BLOCK.get())) {
+                                hitSomething = false;
+                            } else {
+                                // Ванильная формула добычи: скорость инструмента, твёрдость,
+                                // эффекты игрока и корректность инструмента для блока.
+                                float destroyProgress = currentState.getDestroyProgress(
+                                        player, subLevelChunk, data.subLevelLocalPos);
+
+                                if (destroyProgress > 0.0F && Float.isFinite(destroyProgress)) {
+                                    data.progress += destroyProgress;
+                                    BlockEntity blockEntity = subLevelChunk.getBlockEntity(data.subLevelLocalPos);
+                                    int maxHp = BlockHealthManager.getMaxHp(currentState, blockEntity);
+                                    data.subLevelDamageRemainder += destroyProgress * maxHp;
+
+                                    int damage = (int) data.subLevelDamageRemainder;
+                                    if (damage > 0) {
+                                        data.subLevelDamageRemainder -= damage;
+                                        Vec3 blockCenterWorld = data.subLevel.logicalPose().transformPosition(
+                                                new Vec3(data.subLevelLocalPos.getX() + 0.5,
+                                                        data.subLevelLocalPos.getY() + 0.5,
+                                                        data.subLevelLocalPos.getZ() + 0.5));
+                                        SubLevelDamageHelper.damageBlockExact(
+                                                level, data.subLevel, blockCenterWorld, damage);
+                                    }
+
+                                    // Helper заменяет Sable-блок на BROKEN_BLOCK при достижении 0 HP.
+                                    Vec3 blockCenterWorld = data.subLevel.logicalPose().transformPosition(
+                                            new Vec3(data.subLevelLocalPos.getX() + 0.5,
+                                                    data.subLevelLocalPos.getY() + 0.5,
+                                                    data.subLevelLocalPos.getZ() + 0.5));
+                                    if (SubLevelDamageHelper.isBlockDead(level, data.subLevel, blockCenterWorld)) {
+                                        data.progress = 0.0F;
+                                        data.subLevelDamageRemainder = 0.0F;
+                                        OxygenTankItem.setAir(bottle, Math.max(0, air - 10));
+                                        PlasmaCutterItem.setBottle(mainHand, bottle);
+                                    }
+                                }
+                            }
+                        } else {
+                            hitSomething = false;
+                        }
                     } else {
-                        data.progress = 1.0F;
+                        hitSomething = false;
+                    }
+                } else {
+                    // Тот же ванильный расчёт, который Minecraft использует при добыче блоков.
+                    float destroyProgress = data.state.getDestroyProgress(player, level, data.pos);
+                    if (destroyProgress > 0.0F && Float.isFinite(destroyProgress)) {
+                        data.progress += destroyProgress;
                     }
 
                     if (level instanceof ServerLevel serverLevel) {
-                        serverLevel.destroyBlockProgress(player.getId(), data.pos, (int) (data.progress * 10));
+                        int stage = Math.min(9, Math.max(0, (int) (data.progress * 10.0F)));
+                        serverLevel.destroyBlockProgress(player.getId(), data.pos, stage);
                     }
 
                     if (data.progress >= 1.0F) {
@@ -342,7 +417,8 @@ public class WeldingTorchHandler {
                         if (isUnderwater) {
                             level.destroyBlock(data.pos, true, player);
                             level.setBlockAndUpdate(data.pos, Blocks.WATER.defaultBlockState());
-                            level.playSound(null, data.pos, SoundEvents.FIRE_EXTINGUISH, SoundSource.BLOCKS, 1.0f, 1.0f);
+                            level.playSound(null, data.pos, SoundEvents.FIRE_EXTINGUISH,
+                                    SoundSource.BLOCKS, 1.0f, 1.0f);
                         } else {
                             level.destroyBlock(data.pos, true, player);
                         }
@@ -351,18 +427,23 @@ public class WeldingTorchHandler {
                             serverLevel.destroyBlockProgress(player.getId(), data.pos, -1);
                         }
 
-                        data.progress = 0;
-                        OxygenTankItem.setAir(bottle, air - 10);
+                        data.progress = 0.0F;
+                        OxygenTankItem.setAir(bottle, Math.max(0, air - 10));
                         PlasmaCutterItem.setBottle(mainHand, bottle);
                     }
                 }
-            } else {
+            }
+
+            if (!hitSomething) {
                 if (data.pos != null && level instanceof ServerLevel serverLevel) {
                     serverLevel.destroyBlockProgress(player.getId(), data.pos, -1);
                 }
-                data.progress = 0;
+                data.progress = 0.0F;
+                data.subLevelDamageRemainder = 0.0F;
                 data.pos = null;
+                data.state = null;
                 data.subLevel = null;
+                data.subLevelLocalPos = null;
             }
         } else {
             MINING_DATA.remove(player.getUUID());

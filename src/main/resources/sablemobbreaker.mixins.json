@@ -9,6 +9,8 @@
     "client.SableBlockUpdateMixin",
     "client.ClientLevelSetBlockMixin",
     "LevelAabbMixin",
+    "DoorBlockMixin",
+    "TrapDoorBlockMixin",
     "client.ClientChunkLoadMixin"
   ],
   "client": [],

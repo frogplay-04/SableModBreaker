@@ -15,7 +15,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 public class DoorBlockMixin {
     @Inject(method = "neighborChanged", at = @At("HEAD"), cancellable = true)
     private void sablemobbreaker$preventRedstone(BlockState state, Level level, BlockPos pos, Block block, BlockPos fromPos, boolean isMoving, CallbackInfo ci) {
-        if (WeldManager.isWelded(pos)) {
+        if (WeldManager.isWelded(level, pos)) {
             ci.cancel();
         }
     }

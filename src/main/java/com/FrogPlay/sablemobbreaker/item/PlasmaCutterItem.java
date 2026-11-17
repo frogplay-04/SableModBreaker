@@ -16,6 +16,13 @@ import net.minecraft.world.SimpleMenuProvider;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.component.Tool;
+import net.minecraft.tags.BlockTags;
+import net.minecraft.tags.TagKey;
+import net.minecraft.core.registries.Registries;
+import net.minecraft.resources.ResourceLocation;
+import net.minecraft.world.level.block.Block;
+
 import net.minecraft.world.item.TooltipFlag;
 import net.minecraft.world.item.component.CustomData;
 import net.minecraft.world.level.Level;
@@ -23,6 +30,35 @@ import net.minecraft.world.level.Level;
 import java.util.List;
 
 public class PlasmaCutterItem extends Item {
+
+    public static final float MINING_SPEED = 7.0F;
+
+    private static final TagKey<Block> SABLE_LIGHT = TagKey.create(
+            Registries.BLOCK, ResourceLocation.fromNamespaceAndPath("s_a_b", "light"));
+    private static final TagKey<Block> SABLE_BASIC = TagKey.create(
+            Registries.BLOCK, ResourceLocation.fromNamespaceAndPath("s_a_b", "basic"));
+    private static final TagKey<Block> SABLE_CUT = TagKey.create(
+            Registries.BLOCK, ResourceLocation.fromNamespaceAndPath("s_a_b", "cut"));
+    private static final TagKey<Block> SABLE_HARD = TagKey.create(
+            Registries.BLOCK, ResourceLocation.fromNamespaceAndPath("s_a_b", "hard"));
+    public static Properties createProperties() {
+        Tool tool = new Tool(
+                List.of(
+                        Tool.Rule.deniesDrops(BlockTags.NEEDS_DIAMOND_TOOL),
+                        Tool.Rule.minesAndDrops(BlockTags.MINEABLE_WITH_PICKAXE, MINING_SPEED),
+                        Tool.Rule.minesAndDrops(SABLE_LIGHT, MINING_SPEED),
+                        Tool.Rule.minesAndDrops(SABLE_BASIC, MINING_SPEED),
+                        Tool.Rule.minesAndDrops(SABLE_CUT, MINING_SPEED),
+                        Tool.Rule.minesAndDrops(SABLE_HARD, MINING_SPEED)
+                ),
+                MINING_SPEED,
+                1
+        );
+
+        return new Properties()
+                .stacksTo(1)
+                .component(DataComponents.TOOL, tool);
+    }
 
     public PlasmaCutterItem(Properties properties) {
         super(properties);

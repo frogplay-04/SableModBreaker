@@ -15,7 +15,7 @@ import org.jetbrains.annotations.NotNull;
 public class FuelTankFluidHandler implements IFluidHandlerItem {
 
     private final ItemStack container;
-    private static final int CAPACITY = 2000;
+    private static final int CAPACITY = 1500;
 
     public FuelTankFluidHandler(ItemStack container) {
         this.container = container;

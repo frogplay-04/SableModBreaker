@@ -4,6 +4,7 @@ import com.FrogPlay.sablemobbreaker.SableMobBreaker;
 import com.FrogPlay.sablemobbreaker.item.PlasmaCutterItem;
 import com.FrogPlay.sablemobbreaker.item.WeldingTorchItem;
 import com.FrogPlay.sablemobbreaker.network.SetTorchStatePacket;
+import com.FrogPlay.sablemobbreaker.util.WeldGeometry;
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.blaze3d.vertex.VertexConsumer;
 import dev.ryanhcode.sable.api.sublevel.SubLevelContainer;
@@ -20,6 +21,8 @@ import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.Vec3;
+import net.minecraft.world.phys.AABB;
+import net.minecraft.world.phys.BlockHitResult;
 import net.neoforged.api.distmarker.Dist;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
@@ -149,7 +152,38 @@ public class ClientEvents {
             poseStack.popPose();
         }
 
+        renderWeldOutline(mc, poseStack, cam, buffer);
         buffer.endBatch();
+    }
+
+    private static void renderWeldOutline(Minecraft mc, PoseStack poseStack, Vec3 camera, MultiBufferSource.BufferSource buffer) {
+        if (mc.player == null || mc.hitResult == null) return;
+        var held = mc.player.getMainHandItem().getItem();
+        if (!(held instanceof WeldingTorchItem) && !(held instanceof PlasmaCutterItem)) return;
+        if (!(mc.hitResult instanceof BlockHitResult hit)) return;
+        var blocks = WeldGeometry.findAssembly(mc.level, hit.getBlockPos());
+        if (blocks.isEmpty()) return;
+
+        AABB box = WeldGeometry.bounds(blocks);
+        Vec3[][] edges = weldOutlineEdges(box);
+        VertexConsumer lines = buffer.getBuffer(RenderType.lines());
+        Matrix4f matrix = poseStack.last().pose();
+        for (Vec3[] edge : edges) {
+            Vec3 a = edge[0].subtract(camera);
+            Vec3 b = edge[1].subtract(camera);
+            lines.addVertex(matrix, (float)a.x, (float)a.y, (float)a.z).setColor(255, 255, 255, 235).setNormal(0, 1, 0);
+            lines.addVertex(matrix, (float)b.x, (float)b.y, (float)b.z).setColor(255, 255, 255, 235).setNormal(0, 1, 0);
+        }
+    }
+
+    private static Vec3[][] weldOutlineEdges(AABB b) {
+        Vec3 p000 = new Vec3(b.minX,b.minY,b.minZ), p100 = new Vec3(b.maxX,b.minY,b.minZ);
+        Vec3 p010 = new Vec3(b.minX,b.maxY,b.minZ), p110 = new Vec3(b.maxX,b.maxY,b.minZ);
+        Vec3 p001 = new Vec3(b.minX,b.minY,b.maxZ), p101 = new Vec3(b.maxX,b.minY,b.maxZ);
+        Vec3 p011 = new Vec3(b.minX,b.maxY,b.maxZ), p111 = new Vec3(b.maxX,b.maxY,b.maxZ);
+        return new Vec3[][]{{p000,p100},{p010,p110},{p001,p101},{p011,p111},
+                {p000,p010},{p100,p110},{p001,p011},{p101,p111},
+                {p000,p001},{p100,p101},{p010,p011},{p110,p111}};
     }
 
     private static void renderCube(PoseStack poseStack, VertexConsumer vc) {
