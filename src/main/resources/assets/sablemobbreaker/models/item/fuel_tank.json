@@ -1,10 +1,8 @@
 {
-	"format_version": "1.9.0",
 	"credit": "Made with Blockbench",
-	"texture_size": [32, 32],
 	"textures": {
-		"0": "1oxygen_tank",
-		"particle": "1oxygen_tank"
+		"0": "sablemobbreaker:item/fuel_tank",
+		"particle": "sablemobbreaker:item/fuel_tank"
 	},
 	"elements": [
 		{
