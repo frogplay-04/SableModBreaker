@@ -164,18 +164,19 @@ public class ClientEvents {
         var blocks = WeldGeometry.findAssembly(mc.level, hit.getBlockPos());
         if (blocks.isEmpty()) return;
 
-        AABB box = WeldGeometry.bounds(mc.level, blocks);
-        Vec3[][] edges = WeldGeometry.visibleContour(box, mc.player.getEyePosition());
+        AABB box = WeldGeometry.bounds(blocks);
+        Vec3[][] edges = WeldGeometry.visibleFaceEdges(box, mc.player.getEyePosition());
         VertexConsumer lines = buffer.getBuffer(RenderType.lines());
         Matrix4f matrix = poseStack.last().pose();
+        com.mojang.blaze3d.systems.RenderSystem.lineWidth(2.5F);
         for (Vec3[] edge : edges) {
             Vec3 a = edge[0].subtract(camera);
             Vec3 b = edge[1].subtract(camera);
             lines.addVertex(matrix, (float)a.x, (float)a.y, (float)a.z).setColor(255, 255, 255, 235).setNormal(0, 1, 0);
             lines.addVertex(matrix, (float)b.x, (float)b.y, (float)b.z).setColor(255, 255, 255, 235).setNormal(0, 1, 0);
         }
+        com.mojang.blaze3d.systems.RenderSystem.lineWidth(1.0F);
     }
-
 
     private static void renderCube(PoseStack poseStack, VertexConsumer vc) {
         Matrix4f mat = poseStack.last().pose();
@@ -330,7 +331,10 @@ public class ClientEvents {
             Minecraft mc = Minecraft.getInstance();
             if (mc.player != null) {
                 var item = mc.player.getMainHandItem().getItem();
-                if (item instanceof WeldingTorchItem || item instanceof PlasmaCutterItem) {
+                if (item instanceof WeldingTorchItem) {
+                    event.setCanceled(true);
+                } else if (item instanceof PlasmaCutterItem && !(mc.hitResult instanceof net.minecraft.world.phys.EntityHitResult)) {
+                    // Keep custom block mining, but allow normal attacks against mobs.
                     event.setCanceled(true);
                 }
             }

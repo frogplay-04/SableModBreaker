@@ -10,7 +10,6 @@ import net.minecraft.sounds.SoundEvents;
 import net.minecraft.sounds.SoundSource;
 import net.minecraft.world.InteractionResult;
 import net.minecraft.world.entity.player.Player;
-import net.minecraft.network.chat.Component;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.phys.AABB;
@@ -30,7 +29,7 @@ import java.util.concurrent.ConcurrentHashMap;
 
 @EventBusSubscriber(modid = SableMobBreaker.MOD_ID)
 public final class DoorWeldHandler {
-    private static final int SAMPLES_PER_EDGE = 32;
+    private static final int SAMPLES_PER_EDGE = 8;
     private static final double TRACE_RADIUS_SQR = 0.14 * 0.14;
     private static final double REACH = 6.0;
     private static final Map<UUID, TraceSession> SESSIONS = new ConcurrentHashMap<>();
@@ -41,13 +40,15 @@ public final class DoorWeldHandler {
         final boolean welding;
         final Set<BlockPos> blocks;
         final AABB bounds;
+        final Vec3[][] edges;
         int missedTargetTicks;
-        int lastProgress = -1;
-        TraceSession(String key, boolean welding, Set<BlockPos> blocks, AABB bounds) {
-            this.assemblyKey = key;
+
+        TraceSession(String assemblyKey, boolean welding, Set<BlockPos> blocks, AABB bounds, Vec3 eye) {
+            this.assemblyKey = assemblyKey;
             this.welding = welding;
             this.blocks = Set.copyOf(blocks);
             this.bounds = bounds;
+            this.edges = WeldGeometry.visibleFaceEdges(bounds, eye);
         }
     }
 
@@ -57,52 +58,64 @@ public final class DoorWeldHandler {
     public static void onPlayerTick(PlayerTickEvent.Post event) {
         Player player = event.getEntity();
         if (player.level().isClientSide()) return;
+
         ItemStack held = player.getMainHandItem();
         boolean welding = held.getItem() instanceof WeldingTorchItem && WeldingTorchItem.isOn(held);
         boolean cutting = held.getItem() instanceof PlasmaCutterItem && PlasmaCutterItem.isOn(held);
-        if (!welding && !cutting) { SESSIONS.remove(player.getUUID()); return; }
+        if (!welding && !cutting) {
+            SESSIONS.remove(player.getUUID());
+            return;
+        }
 
+        HitResult hit = player.pick(REACH, 1.0F, false);
         Level level = player.level();
         UUID id = player.getUUID();
         TraceSession session = SESSIONS.get(id);
-        HitResult hit = player.pick(REACH, 1.0F, false);
+
         if (hit instanceof BlockHitResult blockHit) {
             BlockPos hitPos = blockHit.getBlockPos();
             Set<BlockPos> assembly = WeldGeometry.findAssembly(level, hitPos);
-            if (assembly.isEmpty()) { SESSIONS.remove(id); return; }
+            if (assembly.isEmpty()) {
+                SESSIONS.remove(id);
+                return;
+            }
+
             boolean alreadyWelded = WeldManager.isWelded(level, hitPos);
-            if ((welding && alreadyWelded) || (cutting && !alreadyWelded)) { SESSIONS.remove(id); return; }
-            String key = level.dimension().location() + ":" + assembly.stream().mapToLong(BlockPos::asLong).min().orElse(0L);
-            if (session == null || !session.assemblyKey.equals(key) || session.welding != welding) {
-                session = new TraceSession(key, welding, assembly, WeldGeometry.bounds(level, assembly));
+            if ((welding && alreadyWelded) || (cutting && !alreadyWelded)) {
+                SESSIONS.remove(id);
+                return;
+            }
+
+            String assemblyKey = level.dimension().location() + ":" + assembly.stream()
+                    .mapToLong(BlockPos::asLong).min().orElse(0L);
+            if (session == null || !session.assemblyKey.equals(assemblyKey) || session.welding != welding) {
+                session = new TraceSession(assemblyKey, welding, assembly, WeldGeometry.bounds(assembly), player.getEyePosition());
                 SESSIONS.put(id, session);
             }
             session.missedTargetTicks = 0;
         } else {
-            if (session == null || session.welding != welding || ++session.missedTargetTicks > 100) {
-                SESSIONS.remove(id); return;
+            if (session == null || session.welding != welding || ++session.missedTargetTicks > 20) {
+                SESSIONS.remove(id);
+                return;
             }
         }
 
-        if (!(hit instanceof BlockHitResult blockHit)) return;
-        Vec3 aimPoint = blockHit.getLocation();
         Vec3 eye = player.getEyePosition();
-        Vec3[][] edges = WeldGeometry.visibleContour(session.bounds, eye);
+        Vec3 rayEnd = eye.add(player.getLookAngle().scale(REACH));
+        Vec3[][] edges = session.edges;
         for (int edge = 0; edge < edges.length; edge++) {
+            Vec3 from = edges[edge][0];
+            Vec3 to = edges[edge][1];
             for (int sample = 0; sample < SAMPLES_PER_EDGE; sample++) {
-                Vec3 point = edges[edge][0].lerp(edges[edge][1], (sample + 0.5) / SAMPLES_PER_EDGE);
-                if (point.distanceToSqr(aimPoint) <= TRACE_RADIUS_SQR) {
+                double t = (sample + 0.5) / SAMPLES_PER_EDGE;
+                Vec3 point = from.lerp(to, t);
+                if (distanceToSegmentSqr(point, eye, rayEnd) <= TRACE_RADIUS_SQR) {
                     session.traced.set(edge * SAMPLES_PER_EDGE + sample);
                 }
             }
         }
-        int progress = session.traced.cardinality() * 100 / (4 * SAMPLES_PER_EDGE);
-        if (progress != session.lastProgress && (progress == 100 || progress % 5 == 0)) {
-            player.displayClientMessage(Component.literal((welding ? "Сварка: " : "Разварка: ") + progress + "%"), true);
-            session.lastProgress = progress;
-        }
 
-        if (session.traced.cardinality() >= 4 * SAMPLES_PER_EDGE) {
+        if (session.traced.cardinality() >= (int) Math.ceil(4 * SAMPLES_PER_EDGE * 0.80D)) {
             BlockPos soundPos = session.blocks.iterator().next();
             if (welding) {
                 WeldManager.weld(level, session.blocks);
@@ -115,6 +128,14 @@ public final class DoorWeldHandler {
         }
     }
 
+    private static double distanceToSegmentSqr(Vec3 point, Vec3 start, Vec3 end) {
+        Vec3 segment = end.subtract(start);
+        double lengthSqr = segment.lengthSqr();
+        if (lengthSqr < 1.0E-9) return point.distanceToSqr(start);
+        double t = point.subtract(start).dot(segment) / lengthSqr;
+        t = Math.max(0.0, Math.min(1.0, t));
+        return point.distanceToSqr(start.add(segment.scale(t)));
+    }
 
     @SubscribeEvent
     public static void onRightClick(PlayerInteractEvent.RightClickBlock event) {
@@ -122,14 +143,16 @@ public final class DoorWeldHandler {
         Level level = event.getLevel();
         BlockPos pos = event.getPos();
         ItemStack stack = event.getItemStack();
+
         if (WeldManager.isWelded(level, pos)) {
             event.setCanceled(true);
             event.setCancellationResult(InteractionResult.FAIL);
             return;
         }
-        boolean activeTool = (stack.getItem() instanceof WeldingTorchItem && WeldingTorchItem.isOn(stack))
+
+        boolean toolActive = (stack.getItem() instanceof WeldingTorchItem && WeldingTorchItem.isOn(stack))
                 || (stack.getItem() instanceof PlasmaCutterItem && PlasmaCutterItem.isOn(stack));
-        if (activeTool && WeldGeometry.isEligible(level.getBlockState(pos))) {
+        if (toolActive && WeldGeometry.isEligible(level.getBlockState(pos))) {
             event.setCanceled(true);
             event.setCancellationResult(InteractionResult.SUCCESS);
         }

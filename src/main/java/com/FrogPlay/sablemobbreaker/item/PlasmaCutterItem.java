@@ -46,6 +46,9 @@ public class PlasmaCutterItem extends Item {
                 List.of(
                         Tool.Rule.deniesDrops(BlockTags.NEEDS_DIAMOND_TOOL),
                         Tool.Rule.minesAndDrops(BlockTags.MINEABLE_WITH_PICKAXE, MINING_SPEED),
+                        Tool.Rule.minesAndDrops(BlockTags.MINEABLE_WITH_AXE, MINING_SPEED),
+                        Tool.Rule.minesAndDrops(BlockTags.MINEABLE_WITH_SHOVEL, MINING_SPEED),
+                        Tool.Rule.minesAndDrops(BlockTags.MINEABLE_WITH_HOE, MINING_SPEED),
                         Tool.Rule.minesAndDrops(SABLE_LIGHT, MINING_SPEED),
                         Tool.Rule.minesAndDrops(SABLE_BASIC, MINING_SPEED),
                         Tool.Rule.minesAndDrops(SABLE_CUT, MINING_SPEED),

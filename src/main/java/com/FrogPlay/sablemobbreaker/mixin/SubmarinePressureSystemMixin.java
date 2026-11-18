@@ -9,11 +9,13 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.phys.Vec3;
 import net.neoforged.neoforge.event.level.BlockEvent;
 import org.spongepowered.asm.mixin.Mixin;
+import org.spongepowered.asm.mixin.Pseudo;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
-@Mixin(targets = "com.maxenonyme.createsubmarine.submarine.system.SubmarinePressureSystem")
+@Pseudo
+@Mixin(targets = "com.maxenonyme.createsubmarine.submarine.system.SubmarinePressureSystem", remap = false)
 public class SubmarinePressureSystemMixin {
 
     @Inject(method = "onBlockBroken", at = @At("HEAD"), cancellable = true, remap = false)
@@ -39,11 +41,13 @@ public class SubmarinePressureSystemMixin {
                     return;
                 }
 
-                SubLevelDamageHelper.damageBlockExact(serverLevel, subLevel, Vec3.atCenterOf(pos), 9999);
-
-                event.setCanceled(true);
-                ci.cancel();
-                return;
+                boolean handled = SubLevelDamageHelper.damageBlockExact(
+                        serverLevel, subLevel, Vec3.atCenterOf(pos), 9999);
+                if (handled) {
+                    event.setCanceled(true);
+                    ci.cancel();
+                    return;
+                }
             }
         } catch (Throwable t) {
             SableMobBreaker.LOGGER.warn("[SMB] Deep Seas mixin error: {}", t.toString());

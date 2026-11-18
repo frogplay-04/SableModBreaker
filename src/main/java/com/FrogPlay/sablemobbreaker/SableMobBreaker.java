@@ -2,6 +2,7 @@ package com.FrogPlay.sablemobbreaker;
 
 import com.FrogPlay.sablemobbreaker.block.ModBlockEntities;
 import com.FrogPlay.sablemobbreaker.block.ModBlocks;
+import com.FrogPlay.sablemobbreaker.config.ModConfig;
 import com.FrogPlay.sablemobbreaker.item.*;
 import com.FrogPlay.sablemobbreaker.menu.PlasmaCutterMenu;
 import com.FrogPlay.sablemobbreaker.menu.WeldingTorchMenu;
@@ -72,6 +73,7 @@ public class SableMobBreaker {
             }));
 
     public SableMobBreaker(IEventBus modEventBus, ModContainer modContainer) {
+        modContainer.registerConfig(net.neoforged.fml.config.ModConfig.Type.SERVER, ModConfig.SPEC);
         ITEMS.register(modEventBus);
         MENUS.register(modEventBus);
         ModBlocks.BLOCKS.register(modEventBus);

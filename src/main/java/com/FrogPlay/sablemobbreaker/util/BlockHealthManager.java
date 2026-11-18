@@ -1,13 +1,9 @@
 package com.FrogPlay.sablemobbreaker.util;
 
+import com.FrogPlay.sablemobbreaker.config.ModConfig;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.BuiltInRegistries;
-import net.minecraft.core.registries.Registries;
 import net.minecraft.nbt.CompoundTag;
-import net.minecraft.resources.ResourceLocation;
-import net.minecraft.tags.BlockTags;
-import net.minecraft.tags.TagKey;
-import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
 
@@ -19,11 +15,6 @@ import java.util.concurrent.ConcurrentHashMap;
 
 public final class BlockHealthManager {
 
-    private static final TagKey<Block> SAB_LIGHT = TagKey.create(Registries.BLOCK, ResourceLocation.fromNamespaceAndPath("s_a_b", "light"));
-    private static final TagKey<Block> SAB_BASIC = TagKey.create(Registries.BLOCK, ResourceLocation.fromNamespaceAndPath("s_a_b", "basic"));
-    private static final TagKey<Block> SAB_CUT = TagKey.create(Registries.BLOCK, ResourceLocation.fromNamespaceAndPath("s_a_b", "cut"));
-    private static final TagKey<Block> SAB_HARD = TagKey.create(Registries.BLOCK, ResourceLocation.fromNamespaceAndPath("s_a_b", "hard"));
-
     private static final Map<String, Integer> HP = new ConcurrentHashMap<>();
     private static final Map<String, SavedBlock> SAVED_BLOCKS = new ConcurrentHashMap<>();
 
@@ -32,28 +23,25 @@ public final class BlockHealthManager {
     private BlockHealthManager() {}
 
     public static int getMaxHp(BlockState state) {
-        if (state.is(SAB_HARD)) return 100;
-        if (state.is(SAB_CUT)) return 70;
-        if (state.is(SAB_BASIC)) return 50;
-        if (state.is(SAB_LIGHT)) return 30;
+        if (state == null || state.isAir()) return 0;
 
-        if (state.is(BlockTags.BEACON_BASE_BLOCKS)) return 50;
-        if (state.is(BlockTags.NEEDS_DIAMOND_TOOL)) return 75;
-        if (state.is(BlockTags.NEEDS_IRON_TOOL)) return 40;
-        if (state.is(BlockTags.NEEDS_STONE_TOOL)) return 25;
+        return hardnessBasedHp(state);
+    }
 
-        if (state.is(BlockTags.PLANKS)) return 10;
-        if (state.is(BlockTags.LOGS)) return 15;
-
-        if (state.is(BlockTags.WOOL)) return 5;
-        if (state.is(BlockTags.WOOL_CARPETS)) return 3;
-
-        if (state.is(BlockTags.IMPERMEABLE)) return 8;
-
-        if (state.is(BlockTags.STONE_BRICKS)) return 30;
-        if (state.is(BlockTags.BASE_STONE_OVERWORLD)) return 30;
-
-        return 20;
+    private static int hardnessBasedHp(BlockState state) {
+        float hardness;
+        try {
+            hardness = state.getDestroySpeed(null, BlockPos.ZERO);
+        } catch (Throwable ignored) {
+            hardness = 1.0F;
+        }
+        if (!Float.isFinite(hardness) || hardness < 0.0F) {
+            return ModConfig.MAX_BLOCK_HP.get();
+        }
+        double raw = (hardness + 0.5D) * ModConfig.HP_PER_HARDNESS.get();
+        int min = ModConfig.MIN_BLOCK_HP.get();
+        int max = Math.max(min, ModConfig.MAX_BLOCK_HP.get());
+        return (int) Math.max(min, Math.min(max, Math.round(raw)));
     }
 
     public static int getMaxHp(BlockState state, BlockEntity be) {
@@ -94,10 +82,6 @@ public final class BlockHealthManager {
         } catch (Throwable ignored) {}
         return null;
     }
-
-    // ============================================================
-    // Основные методы HP
-    // ============================================================
 
     private static String key(UUID subLevelId, int x, int y, int z) {
         return subLevelId + ":" + x + ":" + y + ":" + z;

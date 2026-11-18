@@ -1,5 +1,6 @@
 package com.FrogPlay.sablemobbreaker.goal;
 
+import com.FrogPlay.sablemobbreaker.config.ModConfig;
 import com.FrogPlay.sablemobbreaker.util.SubLevelDamageHelper;
 import com.FrogPlay.sablemobbreaker.util.WeaponClassifier;
 import dev.ryanhcode.sable.companion.math.BoundingBox3dc;
@@ -82,20 +83,20 @@ public class MeleeAttackSubLevelGoal extends Goal {
 
         if (--this.pathRecalcCooldown <= 0) {
             this.pathRecalcCooldown = 10;
-            if (distSq > 4.0D) {
+            if (distSq > ModConfig.MELEE_BLOCK_REACH.get() * ModConfig.MELEE_BLOCK_REACH.get()) {
                 this.mob.getNavigation().moveTo(targetX, targetY, targetZ, this.speedModifier);
             } else {
                 this.mob.getNavigation().stop();
             }
         }
 
-        if (distSq <= 4.0D) {
+        if (distSq <= ModConfig.MELEE_BLOCK_REACH.get() * ModConfig.MELEE_BLOCK_REACH.get()) {
             if (--this.attackCooldown <= 0) {
                 this.attackCooldown = 20;
 
                 Vec3 eyePos = this.mob.getEyePosition();
                 Vec3 lookVec = this.mob.getLookAngle();
-                Vec3 hitPos = eyePos.add(lookVec.scale(1.5));
+                Vec3 hitPos = eyePos.add(lookVec.scale(1.0));
 
                 if (SubLevelDamageHelper.isBlockDead(this.mob.level(), target, hitPos)) {
                     Vec3 alt = findAlivePoint(target, hitPos);
@@ -121,7 +122,7 @@ public class MeleeAttackSubLevelGoal extends Goal {
     }
 
     private Vec3 findAlivePoint(SubLevel target, Vec3 base) {
-        for (int r = 1; r <= 6; r++) {
+        for (int r = 1; r <= 1; r++) {
             for (int dx = -r; dx <= r; dx++) {
                 for (int dz = -r; dz <= r; dz++) {
                     if (Math.abs(dx) != r && Math.abs(dz) != r) continue;
