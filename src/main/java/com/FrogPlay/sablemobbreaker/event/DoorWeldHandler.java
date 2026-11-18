@@ -30,7 +30,7 @@ import java.util.concurrent.ConcurrentHashMap;
 @EventBusSubscriber(modid = SableMobBreaker.MOD_ID)
 public final class DoorWeldHandler {
     private static final int SAMPLES_PER_EDGE = 8;
-    private static final double TRACE_RADIUS_SQR = 0.14 * 0.14;
+    private static final double TRACE_RADIUS_SQR = 0.30 * 0.30;
     private static final double REACH = 6.0;
     private static final Map<UUID, TraceSession> SESSIONS = new ConcurrentHashMap<>();
 
@@ -89,7 +89,7 @@ public final class DoorWeldHandler {
             String assemblyKey = level.dimension().location() + ":" + assembly.stream()
                     .mapToLong(BlockPos::asLong).min().orElse(0L);
             if (session == null || !session.assemblyKey.equals(assemblyKey) || session.welding != welding) {
-                session = new TraceSession(assemblyKey, welding, assembly, WeldGeometry.bounds(assembly), player.getEyePosition());
+                session = new TraceSession(assemblyKey, welding, assembly, WeldGeometry.bounds(level, assembly), player.getEyePosition());
                 SESSIONS.put(id, session);
             }
             session.missedTargetTicks = 0;
@@ -115,7 +115,7 @@ public final class DoorWeldHandler {
             }
         }
 
-        if (session.traced.cardinality() >= (int) Math.ceil(4 * SAMPLES_PER_EDGE * 0.80D)) {
+        if (session.traced.cardinality() >= (int) Math.ceil(4 * SAMPLES_PER_EDGE * 0.60D)) {
             BlockPos soundPos = session.blocks.iterator().next();
             if (welding) {
                 WeldManager.weld(level, session.blocks);

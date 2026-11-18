@@ -55,53 +55,58 @@ public final class WeldGeometry {
             new BlockPos(0, 0, 1), new BlockPos(0, 0, -1)
     };
     public static Vec3[][] visibleFaceEdges(AABB b, Vec3 eye) {
-        double[] distances = {
-                Math.abs(eye.x - b.minX), Math.abs(eye.x - b.maxX),
-                Math.abs(eye.y - b.minY), Math.abs(eye.y - b.maxY),
-                Math.abs(eye.z - b.minZ), Math.abs(eye.z - b.maxZ)
-        };
-        int face = 0;
-        for (int i = 1; i < distances.length; i++) {
-            if (distances[i] < distances[face]) face = i;
+        double sx = b.getXsize();
+        double sy = b.getYsize();
+        double sz = b.getZsize();
+        int axis = sx <= sy && sx <= sz ? 0 : (sy <= sx && sy <= sz ? 1 : 2);
+
+        double cx = (b.minX + b.maxX) * 0.5D;
+        double cy = (b.minY + b.maxY) * 0.5D;
+        double cz = (b.minZ + b.maxZ) * 0.5D;
+
+        if (axis == 0) {
+            double x = eye.x >= cx ? b.maxX : b.minX;
+            Vec3 a = new Vec3(x, b.minY, b.minZ);
+            Vec3 c = new Vec3(x, b.minY, b.maxZ);
+            Vec3 d = new Vec3(x, b.maxY, b.maxZ);
+            Vec3 e = new Vec3(x, b.maxY, b.minZ);
+            return new Vec3[][]{{a,c},{c,d},{d,e},{e,a}};
+        } else if (axis == 1) {
+            double y = eye.y >= cy ? b.maxY : b.minY;
+            Vec3 a = new Vec3(b.minX, y, b.minZ);
+            Vec3 c = new Vec3(b.minX, y, b.maxZ);
+            Vec3 d = new Vec3(b.maxX, y, b.maxZ);
+            Vec3 e = new Vec3(b.maxX, y, b.minZ);
+            return new Vec3[][]{{a,c},{c,d},{d,e},{e,a}};
+        } else {
+            double z = eye.z >= cz ? b.maxZ : b.minZ;
+            Vec3 a = new Vec3(b.minX, b.minY, z);
+            Vec3 c = new Vec3(b.maxX, b.minY, z);
+            Vec3 d = new Vec3(b.maxX, b.maxY, z);
+            Vec3 e = new Vec3(b.minX, b.maxY, z);
+            return new Vec3[][]{{a,c},{c,d},{d,e},{e,a}};
         }
-        Vec3 a, c, d, e;
-        switch (face) {
-            case 0 -> {
-                a = new Vec3(b.minX,b.minY,b.minZ); c = new Vec3(b.minX,b.minY,b.maxZ);
-                d = new Vec3(b.minX,b.maxY,b.maxZ); e = new Vec3(b.minX,b.maxY,b.minZ);
-            }
-            case 1 -> {
-                a = new Vec3(b.maxX,b.minY,b.maxZ); c = new Vec3(b.maxX,b.minY,b.minZ);
-                d = new Vec3(b.maxX,b.maxY,b.minZ); e = new Vec3(b.maxX,b.maxY,b.maxZ);
-            }
-            case 2 -> {
-                a = new Vec3(b.minX,b.minY,b.maxZ); c = new Vec3(b.minX,b.minY,b.minZ);
-                d = new Vec3(b.maxX,b.minY,b.minZ); e = new Vec3(b.maxX,b.minY,b.maxZ);
-            }
-            case 3 -> {
-                a = new Vec3(b.minX,b.maxY,b.minZ); c = new Vec3(b.minX,b.maxY,b.maxZ);
-                d = new Vec3(b.maxX,b.maxY,b.maxZ); e = new Vec3(b.maxX,b.maxY,b.minZ);
-            }
-            case 4 -> {
-                a = new Vec3(b.maxX,b.minY,b.minZ); c = new Vec3(b.minX,b.minY,b.minZ);
-                d = new Vec3(b.minX,b.maxY,b.minZ); e = new Vec3(b.maxX,b.maxY,b.minZ);
-            }
-            default -> {
-                a = new Vec3(b.minX,b.minY,b.maxZ); c = new Vec3(b.maxX,b.minY,b.maxZ);
-                d = new Vec3(b.maxX,b.maxY,b.maxZ); e = new Vec3(b.minX,b.maxY,b.maxZ);
-            }
-        }
-        return new Vec3[][]{{a,c},{c,d},{d,e},{e,a}};
     }
 
-    public static AABB bounds(Set<BlockPos> blocks) {
+    public static AABB bounds(Level level, Set<BlockPos> blocks) {
         if (blocks.isEmpty()) return new AABB(0, 0, 0, 0, 0, 0);
-        int minX = Integer.MAX_VALUE, minY = Integer.MAX_VALUE, minZ = Integer.MAX_VALUE;
-        int maxX = Integer.MIN_VALUE, maxY = Integer.MIN_VALUE, maxZ = Integer.MIN_VALUE;
+
+        AABB result = null;
         for (BlockPos pos : blocks) {
-            minX = Math.min(minX, pos.getX()); minY = Math.min(minY, pos.getY()); minZ = Math.min(minZ, pos.getZ());
-            maxX = Math.max(maxX, pos.getX() + 1); maxY = Math.max(maxY, pos.getY() + 1); maxZ = Math.max(maxZ, pos.getZ() + 1);
+            BlockState state = level.getBlockState(pos);
+            AABB local = state.getShape(level, pos).bounds();
+            if (local.getXsize() <= 0.0D || local.getYsize() <= 0.0D || local.getZsize() <= 0.0D) {
+                continue;
+            }
+            AABB world = local.move(pos);
+            result = result == null ? world : result.minmax(world);
         }
-        return new AABB(minX, minY, minZ, maxX, maxY, maxZ).inflate(0.0125);
+
+        // Fallback only for an unusual block whose outline shape is empty.
+        if (result == null) {
+            BlockPos first = blocks.iterator().next();
+            result = new AABB(first);
+        }
+        return result.inflate(0.002D);
     }
 }

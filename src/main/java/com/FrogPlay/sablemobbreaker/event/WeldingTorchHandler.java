@@ -1,6 +1,7 @@
 package com.FrogPlay.sablemobbreaker.event;
 
 import com.FrogPlay.sablemobbreaker.SableMobBreaker;
+import com.FrogPlay.sablemobbreaker.config.ModConfig;
 import com.FrogPlay.sablemobbreaker.block.ModBlocks;
 import com.FrogPlay.sablemobbreaker.item.FuelTankItem;
 import com.FrogPlay.sablemobbreaker.item.FuelTankFluidHandler;
@@ -191,7 +192,9 @@ public class WeldingTorchHandler {
                 SubLevelContainer container = SubLevelContainer.getContainer(level);
                 if (container != null) {
                     SubLevel targetSubLevel = null;
-                    double closestDistSq = 25.0;
+                    double closestDistSq = Double.MAX_VALUE;
+                    Vec3 rayStart = player.getEyePosition();
+                    Vec3 rayEnd = rayStart.add(player.getLookAngle().scale(5.0D));
 
                     for (SubLevel sl : container.getAllSubLevels()) {
                         if (sl.isRemoved()) continue;
@@ -200,14 +203,22 @@ public class WeldingTorchHandler {
                         double dy = Math.max(0, Math.max(box.minY() - player.getY(), player.getY() - box.maxY()));
                         double dz = Math.max(0, Math.max(box.minZ() - player.getZ(), player.getZ() - box.maxZ()));
                         double distSq = dx * dx + dy * dy + dz * dz;
-                        if (distSq <= closestDistSq) {
-                            closestDistSq = distSq;
-                            targetSubLevel = sl;
+                        AABB worldBounds = new AABB(
+                                box.minX(), box.minY(), box.minZ(),
+                                box.maxX(), box.maxY(), box.maxZ()
+                        );
+                        java.util.Optional<Vec3> rayHit = worldBounds.clip(rayStart, rayEnd);
+                        if (distSq <= 25.0D && rayHit.isPresent()) {
+                            double hitDistance = rayHit.get().distanceToSqr(rayStart);
+                            if (hitDistance < closestDistSq) {
+                                closestDistSq = hitDistance;
+                                targetSubLevel = sl;
+                            }
                         }
                     }
 
                     if (targetSubLevel != null) {
-                        int maxToRepair = Math.min(5, fuel);
+                        int maxToRepair = Math.min(ModConfig.WELD_REPAIR_MAX_BLOCKS.get(), fuel);
                         int cost = autoRepair(player, targetSubLevel, true, maxToRepair);
                         if (cost > 0) {
                             autoRepair(player, targetSubLevel, false, cost);
@@ -343,8 +354,6 @@ public class WeldingTorchHandler {
                             if (currentState.isAir() || currentState.is(ModBlocks.BROKEN_BLOCK.get())) {
                                 hitSomething = false;
                             } else {
-                                // Ванильная формула добычи: скорость инструмента, твёрдость,
-                                // эффекты игрока и корректность инструмента для блока.
                                 float destroyProgress = currentState.getDestroyProgress(
                                         player, subLevelChunk, data.subLevelLocalPos);
 
@@ -385,7 +394,6 @@ public class WeldingTorchHandler {
                         hitSomething = false;
                     }
                 } else {
-                    // Тот же ванильный расчёт, который Minecraft использует при добыче блоков.
                     float destroyProgress = data.state.getDestroyProgress(player, level, data.pos);
                     if (destroyProgress > 0.0F && Float.isFinite(destroyProgress)) {
                         data.progress += destroyProgress;
@@ -470,29 +478,35 @@ public class WeldingTorchHandler {
             }
         }
     }
-
     private static int autoRepair(Player player, SubLevel subLevel, boolean simulate, int maxBlocks) {
+        if (maxBlocks <= 0 || subLevel == null || subLevel.isRemoved()) return 0;
+
         Level level = player.level();
         UUID subId = subLevel.getUniqueId();
         if (subId == null) return 0;
 
+        final double reach = 5.0D;
+        final double step = 0.05D;
+        Vec3 eye = player.getEyePosition();
+        Vec3 look = player.getLookAngle().normalize();
+
+        Vec3 localStart = subLevel.logicalPose().transformPositionInverse(eye);
+        Vec3 localEnd = subLevel.logicalPose().transformPositionInverse(eye.add(look.scale(reach)));
+        Vec3 localDirection = localEnd.subtract(localStart).normalize();
+
+        Set<Long> visited = new java.util.HashSet<>();
         int repaired = 0;
-        BlockPos pCenter = player.blockPosition();
+        for (double distance = 0.0D; distance <= reach && repaired < maxBlocks; distance += step) {
+            Vec3 sample = localStart.add(localDirection.scale(distance));
+            BlockPos plotPos = BlockPos.containing(sample.x, sample.y, sample.z);
+            if (!visited.add(plotPos.asLong())) continue;
 
-        outer:
-        for (int dx = -REPAIR_RADIUS; dx <= REPAIR_RADIUS; dx++) {
-            for (int dy = -REPAIR_RADIUS; dy <= REPAIR_RADIUS; dy++) {
-                for (int dz = -REPAIR_RADIUS; dz <= REPAIR_RADIUS; dz++) {
-                    if (repaired >= maxBlocks) break outer;
-
-                    Vec3 hitVec = Vec3.atCenterOf(pCenter.offset(dx, dy, dz));
-                    Vec3 plotPos = subLevel.logicalPose().transformPositionInverse(hitVec);
-                    BlockPos plotGridBlockPos = BlockPos.containing(plotPos.x, plotPos.y, plotPos.z);
-
-                    if (repairBlock(level, subLevel, subId, plotGridBlockPos, hitVec, simulate)) {
-                        repaired++;
-                    }
-                }
+            if (plotPos.getY() < level.getMinBuildHeight() || plotPos.getY() >= level.getMaxBuildHeight()) {
+                continue;
+            }
+            Vec3 worldSample = eye.add(look.scale(distance));
+            if (repairBlock(level, subLevel, subId, plotPos, worldSample, simulate)) {
+                repaired++;
             }
         }
         return repaired;

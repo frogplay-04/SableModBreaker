@@ -164,7 +164,7 @@ public class ClientEvents {
         var blocks = WeldGeometry.findAssembly(mc.level, hit.getBlockPos());
         if (blocks.isEmpty()) return;
 
-        AABB box = WeldGeometry.bounds(blocks);
+        AABB box = WeldGeometry.bounds(mc.level, blocks);
         Vec3[][] edges = WeldGeometry.visibleFaceEdges(box, mc.player.getEyePosition());
         VertexConsumer lines = buffer.getBuffer(RenderType.lines());
         Matrix4f matrix = poseStack.last().pose();
@@ -334,7 +334,6 @@ public class ClientEvents {
                 if (item instanceof WeldingTorchItem) {
                     event.setCanceled(true);
                 } else if (item instanceof PlasmaCutterItem && !(mc.hitResult instanceof net.minecraft.world.phys.EntityHitResult)) {
-                    // Keep custom block mining, but allow normal attacks against mobs.
                     event.setCanceled(true);
                 }
             }
