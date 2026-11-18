@@ -38,7 +38,8 @@ public class SableMobBreaker {
             ITEMS.register("oxygen_tank", () -> new OxygenTankItem(new Item.Properties().stacksTo(1)));
 
     public static final DeferredHolder<Item, PlasmaCutterItem> PLASMA_CUTTER =
-            ITEMS.register("plasma_cutter", () -> new PlasmaCutterItem(new Item.Properties().stacksTo(1)));
+            ITEMS.register("plasma_cutter",
+                    () -> new PlasmaCutterItem(PlasmaCutterItem.createProperties()));
 
     public static final DeferredHolder<Item, Item> HULL =
             ITEMS.register("hull", () -> new Item(new Item.Properties()));
