@@ -19,6 +19,12 @@ public class NetworkHandler {
                 BlockHealthSyncPacket::handle
         );
 
+        registrar.playToClient(
+                RepairHpNoticePacket.TYPE,
+                RepairHpNoticePacket.STREAM_CODEC,
+                RepairHpNoticePacket::handle
+        );
+
         registrar.playToServer(
                 SetTorchStatePacket.TYPE,
                 SetTorchStatePacket.STREAM_CODEC,

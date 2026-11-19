@@ -25,14 +25,20 @@ public class OxygenShelfBlockEntity extends BlockEntity implements IHaveGoggleIn
         @Override
         public int receiveEnergy(int maxReceive, boolean simulate) {
             int received = super.receiveEnergy(maxReceive, simulate);
-            if (received > 0 && !simulate) setChanged();
+            if (received > 0 && !simulate) {
+                setChanged();
+                syncBlock();
+            }
             return received;
         }
 
         @Override
         public int extractEnergy(int maxExtract, boolean simulate) {
             int extracted = super.extractEnergy(maxExtract, simulate);
-            if (extracted > 0 && !simulate) setChanged();
+            if (extracted > 0 && !simulate) {
+                setChanged();
+                syncBlock();
+            }
             return extracted;
         }
     };
@@ -53,6 +59,13 @@ public class OxygenShelfBlockEntity extends BlockEntity implements IHaveGoggleIn
             return id.equals(OXYGEN_TANK_ID);
         }
     };
+
+
+    private void syncBlock() {
+        if (level != null && !level.isClientSide) {
+            level.sendBlockUpdated(worldPosition, getBlockState(), getBlockState(), 3);
+        }
+    }
 
     public OxygenShelfBlockEntity(BlockPos pos, BlockState state) {
         super(ModBlockEntities.OXYGEN_SHELF_ENTITY.get(), pos, state);

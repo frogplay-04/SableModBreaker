@@ -1,8 +1,9 @@
 package com.FrogPlay.sablemobbreaker.event;
 
 import com.FrogPlay.sablemobbreaker.SableMobBreaker;
-import com.FrogPlay.sablemobbreaker.config.ModConfig;
 import com.FrogPlay.sablemobbreaker.block.ModBlocks;
+import com.FrogPlay.sablemobbreaker.block.BrokenBlockEntity;
+import com.FrogPlay.sablemobbreaker.config.ModConfig;
 import com.FrogPlay.sablemobbreaker.item.FuelTankItem;
 import com.FrogPlay.sablemobbreaker.item.FuelTankFluidHandler;
 import com.FrogPlay.sablemobbreaker.item.OxygenTankItem;
@@ -10,6 +11,7 @@ import com.FrogPlay.sablemobbreaker.item.PlasmaCutterItem;
 import com.FrogPlay.sablemobbreaker.item.WeldingTorchInventory;
 import com.FrogPlay.sablemobbreaker.item.WeldingTorchItem;
 import com.FrogPlay.sablemobbreaker.network.BlockHealthSyncPacket;
+import com.FrogPlay.sablemobbreaker.network.RepairHpNoticePacket;
 import com.FrogPlay.sablemobbreaker.util.BlockHealthManager;
 import com.FrogPlay.sablemobbreaker.util.SubLevelDamageHelper;
 import dev.ryanhcode.sable.api.sublevel.SubLevelContainer;
@@ -30,6 +32,7 @@ import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.sounds.SoundEvents;
 import net.minecraft.sounds.SoundSource;
 import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
@@ -69,7 +72,6 @@ import java.util.concurrent.ConcurrentHashMap;
 @EventBusSubscriber(modid = SableMobBreaker.MOD_ID)
 public class WeldingTorchHandler {
 
-    private static final int REPAIR_RADIUS = 5;
 
     private static final Set<BlockPos> LOGGED_REPAIR_FAILURES = ConcurrentHashMap.newKeySet();
     private static final int LOGGED_REPAIR_FAILURES_MAX = 256;
@@ -105,8 +107,8 @@ public class WeldingTorchHandler {
 
     @SubscribeEvent
     public static void onAttackEntity(AttackEntityEvent event) {
-        if (event.getEntity().getMainHandItem().getItem() instanceof WeldingTorchItem ||
-                event.getEntity().getMainHandItem().getItem() instanceof PlasmaCutterItem) {
+        // Welding torch is not a melee weapon; plasma cutter keeps normal entity attacks.
+        if (event.getEntity().getMainHandItem().getItem() instanceof WeldingTorchItem) {
             event.setCanceled(true);
         }
     }
@@ -191,27 +193,21 @@ public class WeldingTorchHandler {
             if (player.tickCount % 5 == 0) {
                 SubLevelContainer container = SubLevelContainer.getContainer(level);
                 if (container != null) {
-                    SubLevel targetSubLevel = null;
-                    double closestDistSq = Double.MAX_VALUE;
                     Vec3 rayStart = player.getEyePosition();
-                    Vec3 rayEnd = rayStart.add(player.getLookAngle().scale(5.0D));
+                    Vec3 rayEnd = rayStart.add(player.getLookAngle().scale(6.0D));
+                    SubLevel targetSubLevel = null;
+                    double closestHit = Double.MAX_VALUE;
 
                     for (SubLevel sl : container.getAllSubLevels()) {
                         if (sl.isRemoved()) continue;
                         BoundingBox3dc box = sl.boundingBox();
-                        double dx = Math.max(0, Math.max(box.minX() - player.getX(), player.getX() - box.maxX()));
-                        double dy = Math.max(0, Math.max(box.minY() - player.getY(), player.getY() - box.maxY()));
-                        double dz = Math.max(0, Math.max(box.minZ() - player.getZ(), player.getZ() - box.maxZ()));
-                        double distSq = dx * dx + dy * dy + dz * dz;
-                        AABB worldBounds = new AABB(
-                                box.minX(), box.minY(), box.minZ(),
-                                box.maxX(), box.maxY(), box.maxZ()
-                        );
-                        java.util.Optional<Vec3> rayHit = worldBounds.clip(rayStart, rayEnd);
-                        if (distSq <= 25.0D && rayHit.isPresent()) {
-                            double hitDistance = rayHit.get().distanceToSqr(rayStart);
-                            if (hitDistance < closestDistSq) {
-                                closestDistSq = hitDistance;
+                        AABB worldBounds = new AABB(box.minX(), box.minY(), box.minZ(),
+                                box.maxX(), box.maxY(), box.maxZ());
+                        java.util.Optional<Vec3> hit = worldBounds.clip(rayStart, rayEnd);
+                        if (hit.isPresent()) {
+                            double distance = hit.get().distanceToSqr(rayStart);
+                            if (distance < closestHit) {
+                                closestHit = distance;
                                 targetSubLevel = sl;
                             }
                         }
@@ -219,13 +215,15 @@ public class WeldingTorchHandler {
 
                     if (targetSubLevel != null) {
                         int maxToRepair = Math.min(ModConfig.WELD_REPAIR_MAX_BLOCKS.get(), fuel);
-                        int cost = autoRepair(player, targetSubLevel, true, maxToRepair);
-                        if (cost > 0) {
-                            autoRepair(player, targetSubLevel, false, cost);
-                            drainFuel(bottle, cost);
-                            WeldingTorchItem.setBottle(mainHand, bottle);
-                            level.playSound(null, player.getX(), player.getY(), player.getZ(),
-                                    SoundEvents.FIRE_AMBIENT, SoundSource.PLAYERS, 0.5f, 1.5f);
+                        int repaired = autoRepair(player, targetSubLevel, true, maxToRepair);
+                        if (repaired > 0) {
+                            int cost = autoRepair(player, targetSubLevel, false, repaired);
+                            if (cost > 0) {
+                                drainFuel(bottle, cost);
+                                WeldingTorchItem.setBottle(mainHand, bottle);
+                                level.playSound(null, player.getX(), player.getY(), player.getZ(),
+                                        SoundEvents.FIRE_AMBIENT, SoundSource.PLAYERS, 0.5f, 1.5f);
+                            }
                         }
                     }
                 }
@@ -354,6 +352,8 @@ public class WeldingTorchHandler {
                             if (currentState.isAir() || currentState.is(ModBlocks.BROKEN_BLOCK.get())) {
                                 hitSomething = false;
                             } else {
+                                // Ванильная формула добычи: скорость инструмента, твёрдость,
+                                // эффекты игрока и корректность инструмента для блока.
                                 float destroyProgress = currentState.getDestroyProgress(
                                         player, subLevelChunk, data.subLevelLocalPos);
 
@@ -361,7 +361,7 @@ public class WeldingTorchHandler {
                                     data.progress += destroyProgress;
                                     BlockEntity blockEntity = subLevelChunk.getBlockEntity(data.subLevelLocalPos);
                                     int maxHp = BlockHealthManager.getMaxHp(currentState, blockEntity);
-                                    data.subLevelDamageRemainder += destroyProgress * maxHp;
+                                    data.subLevelDamageRemainder += Math.max(0.25F, destroyProgress * maxHp * 0.25F);
 
                                     int damage = (int) data.subLevelDamageRemainder;
                                     if (damage > 0) {
@@ -394,6 +394,7 @@ public class WeldingTorchHandler {
                         hitSomething = false;
                     }
                 } else {
+                    // Тот же ванильный расчёт, который Minecraft использует при добыче блоков.
                     float destroyProgress = data.state.getDestroyProgress(player, level, data.pos);
                     if (destroyProgress > 0.0F && Float.isFinite(destroyProgress)) {
                         data.progress += destroyProgress;
@@ -478,35 +479,45 @@ public class WeldingTorchHandler {
             }
         }
     }
+
     private static int autoRepair(Player player, SubLevel subLevel, boolean simulate, int maxBlocks) {
         if (maxBlocks <= 0 || subLevel == null || subLevel.isRemoved()) return 0;
-
         Level level = player.level();
         UUID subId = subLevel.getUniqueId();
         if (subId == null) return 0;
 
-        final double reach = 5.0D;
-        final double step = 0.05D;
-        Vec3 eye = player.getEyePosition();
-        Vec3 look = player.getLookAngle().normalize();
-
-        Vec3 localStart = subLevel.logicalPose().transformPositionInverse(eye);
-        Vec3 localEnd = subLevel.logicalPose().transformPositionInverse(eye.add(look.scale(reach)));
-        Vec3 localDirection = localEnd.subtract(localStart).normalize();
-
-        Set<Long> visited = new java.util.HashSet<>();
+        Vec3 worldStart = player.getEyePosition();
+        Vec3 worldDirection = player.getLookAngle().normalize();
+        java.util.Set<BlockPos> visited = new java.util.HashSet<>();
         int repaired = 0;
-        for (double distance = 0.0D; distance <= reach && repaired < maxBlocks; distance += step) {
-            Vec3 sample = localStart.add(localDirection.scale(distance));
-            BlockPos plotPos = BlockPos.containing(sample.x, sample.y, sample.z);
-            if (!visited.add(plotPos.asLong())) continue;
+        int repairRange = 6;
+        for (double distance = 0.15D; distance <= repairRange; distance += 0.08D) {
+            Vec3 worldPoint = worldStart.add(worldDirection.scale(distance));
+            Vec3 localPoint = subLevel.logicalPose().transformPositionInverse(worldPoint);
+            BlockPos localPos = BlockPos.containing(localPoint.x, localPoint.y, localPoint.z);
+            if (!visited.add(localPos)) continue;
 
-            if (plotPos.getY() < level.getMinBuildHeight() || plotPos.getY() >= level.getMaxBuildHeight()) {
-                continue;
+            ChunkPos cp = new ChunkPos(localPos.getX() >> 4, localPos.getZ() >> 4);
+            SubLevelContainer container = SubLevelContainer.getContainer(level);
+            if (container == null || !container.inBounds(cp)) continue;
+            LevelChunk chunk = container.getChunk(cp);
+            if (chunk == null) continue;
+
+            BlockState state = chunk.getBlockState(localPos);
+            boolean candidate = state.is(ModBlocks.BROKEN_BLOCK.get());
+            if (!candidate && !state.isAir()) {
+                BlockEntity be = chunk.getBlockEntity(localPos);
+                int maxHp = BlockHealthManager.getMaxHp(state, be);
+                int currentHp = BlockHealthManager.getHp(subId, localPos.getX(), localPos.getY(), localPos.getZ(), state, be);
+                candidate = currentHp < maxHp;
+                // An intact block blocks the repair ray; do not repair through walls.
+                if (!candidate) break;
             }
-            Vec3 worldSample = eye.add(look.scale(distance));
-            if (repairBlock(level, subLevel, subId, plotPos, worldSample, simulate)) {
+            if (!candidate) continue;
+
+            if (repairBlock(level, subLevel, subId, localPos, worldPoint, player, simulate)) {
                 repaired++;
+                if (repaired >= maxBlocks) break;
             }
         }
         return repaired;
@@ -579,7 +590,7 @@ public class WeldingTorchHandler {
     }
 
     private static boolean repairBlock(Level level, SubLevel subLevel, UUID subId,
-                                       BlockPos plotGridBlockPos, Vec3 hitVec, boolean simulate) {
+                                       BlockPos plotGridBlockPos, Vec3 hitVec, Player player, boolean simulate) {
         int y = plotGridBlockPos.getY();
         if (y < level.getMinBuildHeight() || y >= level.getMaxBuildHeight()) return false;
         if (!(level instanceof ServerLevel serverLevel)) return false;
@@ -587,140 +598,91 @@ public class WeldingTorchHandler {
         ChunkPos cp = new ChunkPos(plotGridBlockPos.getX() >> 4, plotGridBlockPos.getZ() >> 4);
         SubLevelContainer container = SubLevelContainer.getContainer(level);
         if (container == null || !container.inBounds(cp)) return false;
-
         LevelChunk chunk = container.getChunk(cp);
         PlotChunkHolder holder = container.getChunkHolder(cp);
         if (chunk == null || holder == null) return false;
 
-        int chunkLocalX = plotGridBlockPos.getX() & 15;
-        int chunkLocalZ = plotGridBlockPos.getZ() & 15;
-        BlockPos blockInChunk = new BlockPos(chunkLocalX, y, chunkLocalZ);
-
+        int localX = plotGridBlockPos.getX() & 15;
+        int localZ = plotGridBlockPos.getZ() & 15;
+        BlockPos blockInChunk = new BlockPos(localX, y, localZ);
         BlockState state = chunk.getBlockState(blockInChunk);
+        BlockEntity blockEntity = chunk.getBlockEntity(blockInChunk);
 
-        var saved = BlockHealthManager.getDestroyedBlock(
+        BlockHealthManager.SavedBlock saved = BlockHealthManager.getDestroyedBlock(
                 subId, plotGridBlockPos.getX(), y, plotGridBlockPos.getZ());
+        if (saved == null && blockEntity instanceof BrokenBlockEntity brokenEntity
+                && brokenEntity.getOriginalState() != null) {
+            saved = new BlockHealthManager.SavedBlock(
+                    brokenEntity.getOriginalState(), brokenEntity.getOriginalNbt());
+        }
 
-        if (saved != null && saved.state() != null) {
-            int maxHp = BlockHealthManager.getMaxHp(saved.state(), saved.nbt());
-
-            if (simulate) {
-                return true;
-            }
-
+        int repairAmount = ModConfig.REPAIR_HP_PER_PULSE.get();
+        if (saved != null && state.is(ModBlocks.BROKEN_BLOCK.get())) {
+            if (simulate) return true;
             try {
-                if (state != saved.state()) {
-                    try {
-                        holder.handleBlockChange(
-                                plotGridBlockPos.getX(), y, plotGridBlockPos.getZ(),
-                                state, saved.state());
-                    } catch (Throwable t) {
-                        logRepairFailure(plotGridBlockPos,
-                                "[SMB] repair handleBlockChange failed", t);
-                    }
+                BlockState restoredState = saved.state();
+                holder.handleBlockChange(plotGridBlockPos.getX(), y, plotGridBlockPos.getZ(), state, restoredState);
+                LevelChunkSection[] sections = chunk.getSections();
+                int sectionIndex = chunk.getSectionIndex(y);
+                if (sectionIndex < 0 || sectionIndex >= sections.length || sections[sectionIndex] == null) return false;
+                sections[sectionIndex].setBlockState(localX, y & 15, localZ, restoredState);
+                chunk.removeBlockEntity(blockInChunk);
 
-                    try {
-                        LevelChunkSection[] sections = chunk.getSections();
-                        int sectionIndex = chunk.getSectionIndex(y);
-                        if (sectionIndex >= 0 && sectionIndex < sections.length) {
-                            LevelChunkSection section = sections[sectionIndex];
-                            if (section != null) {
-                                section.setBlockState(
-                                        chunkLocalX & 15,
-                                        y & 15,
-                                        chunkLocalZ & 15,
-                                        saved.state());
-                                chunk.setUnsaved(true);
-                            }
-                        }
-                    } catch (Throwable t) {
-                        logRepairFailure(plotGridBlockPos,
-                                "[SMB] repair section.setBlockState failed", t);
-                    }
+                BlockEntity restoredBe = null;
+                if (saved.nbt() != null) {
+                    restoredBe = BlockEntity.loadStatic(plotGridBlockPos, restoredState, saved.nbt(), level.registryAccess());
+                    if (restoredBe != null) chunk.setBlockEntity(restoredBe);
                 }
-
-                BlockEntity newBe = chunk.getBlockEntity(blockInChunk);
-                if (newBe == null && saved.nbt() != null) {
-                    newBe = BlockEntity.loadStatic(
-                            plotGridBlockPos, saved.state(), saved.nbt(), level.registryAccess());
-                    if (newBe != null) chunk.setBlockEntity(newBe);
-                } else if (newBe != null && saved.nbt() != null) {
-                    newBe.loadWithComponents(saved.nbt(), level.registryAccess());
-                    newBe.setChanged();
+                chunk.setUnsaved(true);
+                int maxHp = BlockHealthManager.getMaxHp(restoredState, restoredBe);
+                int restoredHp = Math.min(maxHp, repairAmount);
+                BlockHealthManager.setHp(subId, plotGridBlockPos.getX(), y, plotGridBlockPos.getZ(), restoredHp);
+                sendRepairUpdate(serverLevel, plotGridBlockPos, restoredState, subId, restoredHp, maxHp, hitVec);
+                if (player instanceof ServerPlayer serverPlayer && !isWearingCreateGoggles(serverPlayer)) {
+                    PacketDistributor.sendToPlayer(serverPlayer, new RepairHpNoticePacket(restoredHp, maxHp));
                 }
-
-                ClientboundBlockUpdatePacket plotPacket =
-                        new ClientboundBlockUpdatePacket(plotGridBlockPos, saved.state());
-
-                ClientboundBlockEntityDataPacket bePacket = null;
-                if (newBe != null) {
-                    try {
-                        Constructor<ClientboundBlockEntityDataPacket> constructor =
-                                ClientboundBlockEntityDataPacket.class.getDeclaredConstructor(
-                                        BlockPos.class, BlockEntityType.class, CompoundTag.class);
-                        constructor.setAccessible(true);
-                        CompoundTag nbt = saved.nbt() != null
-                                ? saved.nbt()
-                                : newBe.getUpdateTag(level.registryAccess());
-                        bePacket = constructor.newInstance(plotGridBlockPos, newBe.getType(), nbt);
-                    } catch (Throwable t) {
-                        bePacket = ClientboundBlockEntityDataPacket.create(newBe);
-                    }
-                }
-
-                for (ServerPlayer p : serverLevel.players()) {
-                    if (p.distanceToSqr(hitVec.x, hitVec.y, hitVec.z) < 4096) {
-                        p.connection.send(plotPacket);
-                        if (bePacket != null) p.connection.send(bePacket);
-                    }
-                }
-
-                BlockHealthManager.setHp(
-                        subId, plotGridBlockPos.getX(), y, plotGridBlockPos.getZ(), maxHp);
-                BlockHealthManager.removeDestroyedBlock(
-                        subId, plotGridBlockPos.getX(), y, plotGridBlockPos.getZ());
-
-                BlockHealthSyncPacket hpPacket = new BlockHealthSyncPacket(
-                        subId, plotGridBlockPos.getX(), y, plotGridBlockPos.getZ(),
-                        maxHp, maxHp);
-                for (ServerPlayer p : serverLevel.players()) {
-                    if (p.distanceToSqr(hitVec.x, hitVec.y, hitVec.z) < 4096) {
-                        PacketDistributor.sendToPlayer(p, hpPacket);
-                    }
-                }
-
-                LOGGED_REPAIR_FAILURES.remove(plotGridBlockPos.immutable());
-
                 return true;
             } catch (Throwable t) {
-                logRepairFailure(plotGridBlockPos, "[SMB] repair failed", t);
+                logRepairFailure(plotGridBlockPos, "[SMB] gradual broken-block restoration failed", t);
                 return false;
             }
         }
 
-        if (state.is(ModBlocks.BROKEN_BLOCK.get())) {
-            BlockHealthManager.reset(subId, plotGridBlockPos.getX(), y, plotGridBlockPos.getZ());
-            return false;
-        }
-
-        BlockEntity be = chunk.getBlockEntity(blockInChunk);
-        int maxHp = BlockHealthManager.getMaxHp(state, be);
-        int currentHp = BlockHealthManager.getHp(
-                subId, plotGridBlockPos.getX(), y, plotGridBlockPos.getZ(), state, be);
-
+        if (state.isAir() || state.is(ModBlocks.BROKEN_BLOCK.get())) return false;
+        int maxHp = BlockHealthManager.getMaxHp(state, blockEntity);
+        int currentHp = BlockHealthManager.getHp(subId, plotGridBlockPos.getX(), y, plotGridBlockPos.getZ(), state, blockEntity);
         if (currentHp >= maxHp) return false;
+        if (simulate) return true;
 
-        if (!simulate) {
-            BlockHealthManager.setHp(
-                    subId, plotGridBlockPos.getX(), y, plotGridBlockPos.getZ(), maxHp);
-            BlockHealthSyncPacket packet = new BlockHealthSyncPacket(
-                    subId, plotGridBlockPos.getX(), y, plotGridBlockPos.getZ(), maxHp, maxHp);
-            for (ServerPlayer player : serverLevel.players()) {
-                if (player.distanceToSqr(hitVec.x, hitVec.y, hitVec.z) < 4096) {
-                    PacketDistributor.sendToPlayer(player, packet);
-                }
-            }
+        int newHp = Math.min(maxHp, currentHp + repairAmount);
+        BlockHealthManager.setHp(subId, plotGridBlockPos.getX(), y, plotGridBlockPos.getZ(), newHp);
+        sendRepairUpdate(serverLevel, plotGridBlockPos, state, subId, newHp, maxHp, hitVec);
+        if (player instanceof ServerPlayer serverPlayer && !isWearingCreateGoggles(serverPlayer)) {
+            PacketDistributor.sendToPlayer(serverPlayer, new RepairHpNoticePacket(newHp, maxHp));
         }
         return true;
+    }
+
+    /**
+     * Create engineer's goggles already provide block information, so the temporary
+     * repair HP notice is only shown to players who are not wearing them.
+     */
+    private static boolean isWearingCreateGoggles(ServerPlayer player) {
+        ItemStack headStack = player.getItemBySlot(EquipmentSlot.HEAD);
+        ResourceLocation itemId = BuiltInRegistries.ITEM.getKey(headStack.getItem());
+        return ResourceLocation.fromNamespaceAndPath("create", "goggles").equals(itemId);
+    }
+
+    private static void sendRepairUpdate(ServerLevel level, BlockPos pos, BlockState state, UUID subId,
+                                         int hp, int maxHp, Vec3 hitVec) {
+        ClientboundBlockUpdatePacket blockPacket = new ClientboundBlockUpdatePacket(pos, state);
+        BlockHealthSyncPacket hpPacket = new BlockHealthSyncPacket(
+                subId, pos.getX(), pos.getY(), pos.getZ(), hp, maxHp);
+        for (ServerPlayer viewer : level.players()) {
+            if (viewer.distanceToSqr(hitVec.x, hitVec.y, hitVec.z) < 4096) {
+                viewer.connection.send(blockPacket);
+                PacketDistributor.sendToPlayer(viewer, hpPacket);
+            }
+        }
     }
 }

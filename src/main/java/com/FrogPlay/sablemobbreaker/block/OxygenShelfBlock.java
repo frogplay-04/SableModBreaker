@@ -7,6 +7,14 @@ import net.minecraft.world.InteractionResult;
 import net.minecraft.world.ItemInteractionResult;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.core.component.DataComponents;
+import net.minecraft.world.item.BlockItem;
+import net.minecraft.world.item.component.CustomData;
+import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.resources.ResourceLocation;
+import com.FrogPlay.sablemobbreaker.SableMobBreaker;
+import com.FrogPlay.sablemobbreaker.block.ModBlockEntities;
+import com.FrogPlay.sablemobbreaker.block.ModBlocks;
 import net.minecraft.world.item.context.BlockPlaceContext;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.LevelAccessor;
@@ -70,6 +78,15 @@ public class OxygenShelfBlock extends Block implements EntityBlock {
         if (level.getBlockEntity(pos) instanceof OxygenShelfBlockEntity be) {
             ItemStackHandler handler = be.getItemHandler();
             if (level.isClientSide) return ItemInteractionResult.SUCCESS;
+            ResourceLocation heldId = BuiltInRegistries.ITEM.getKey(stack.getItem());
+            if (player.isShiftKeyDown() && heldId.equals(ResourceLocation.fromNamespaceAndPath("create", "wrench"))) {
+                ItemStack shelf = new ItemStack(SableMobBreaker.OXYGEN_SHELF_ITEM.get());
+                var data = be.saveWithoutMetadata(level.registryAccess());
+                BlockItem.setBlockEntityData(shelf, ModBlockEntities.OXYGEN_SHELF_ENTITY.get(), data);
+                if (!player.getInventory().add(shelf)) player.drop(shelf, false);
+                level.removeBlock(pos, false);
+                return ItemInteractionResult.SUCCESS;
+            }
             if (stack.getItem() instanceof com.FrogPlay.sablemobbreaker.item.OxygenTankItem) {
                 for (int i = 0; i < handler.getSlots(); i++) {
                     if (handler.getStackInSlot(i).isEmpty()) {

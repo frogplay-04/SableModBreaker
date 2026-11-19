@@ -11,6 +11,7 @@ import dev.ryanhcode.sable.api.sublevel.SubLevelContainer;
 import dev.ryanhcode.sable.sublevel.SubLevel;
 import net.minecraft.client.Camera;
 import net.minecraft.client.Minecraft;
+import net.minecraft.core.BlockPos;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.renderer.LightTexture;
 import net.minecraft.client.renderer.MultiBufferSource;
@@ -39,6 +40,7 @@ import org.joml.Vector4f;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
+import java.util.BitSet;
 
 @EventBusSubscriber(modid = SableMobBreaker.MOD_ID, value = Dist.CLIENT)
 public class ClientEvents {
@@ -47,9 +49,9 @@ public class ClientEvents {
     private static final int RESCAN_INTERVAL = 10;
 
     private static final int BLOCKS = 10;
-    private static final int BLOCK_W = 4;
-    private static final int BLOCK_H = 3;
-    private static final int GAP = 1;
+    private static final int BLOCK_W = 6;
+    private static final int BLOCK_H = 5;
+    private static final int GAP = 2;
     private static final int TOTAL_W = BLOCKS * BLOCK_W + (BLOCKS - 1) * GAP;
 
     private static final int LIME = 0xFF55FF55;
@@ -62,6 +64,17 @@ public class ClientEvents {
     private static final List<Label> LABELS = new ArrayList<>();
     private static int tickCounter = RESCAN_INTERVAL;
     private static boolean wasAttackDown = false;
+    private static BitSet clientWeldTrace = new BitSet(48);
+    private static String clientWeldAssembly = "";
+    private static int repairNoticeTicks = 0;
+    private static int repairNoticeHp = 0;
+    private static int repairNoticeMaxHp = 0;
+
+    public static void showRepairHp(int hp, int maxHp) {
+        repairNoticeHp = hp;
+        repairNoticeMaxHp = maxHp;
+        repairNoticeTicks = 20;
+    }
 
     public static void markDirty() {
         tickCounter = 0;
@@ -71,6 +84,7 @@ public class ClientEvents {
     public static void onClientTick(ClientTickEvent.Post event) {
         Minecraft mc = Minecraft.getInstance();
         Player player = mc.player;
+        if (repairNoticeTicks > 0) repairNoticeTicks--;
         if (player == null) {
             wasAttackDown = false;
             return;
@@ -157,25 +171,66 @@ public class ClientEvents {
     }
 
     private static void renderWeldOutline(Minecraft mc, PoseStack poseStack, Vec3 camera, MultiBufferSource.BufferSource buffer) {
-        if (mc.player == null || mc.hitResult == null) return;
+        if (mc.player == null || mc.hitResult == null) {
+            clientWeldTrace.clear();
+            clientWeldAssembly = "";
+            return;
+        }
         var held = mc.player.getMainHandItem().getItem();
-        if (!(held instanceof WeldingTorchItem) && !(held instanceof PlasmaCutterItem)) return;
+        boolean welding = held instanceof WeldingTorchItem && WeldingTorchItem.isOn(mc.player.getMainHandItem());
+        boolean cutting = held instanceof PlasmaCutterItem && PlasmaCutterItem.isOn(mc.player.getMainHandItem());
+        if (!welding && !cutting) {
+            clientWeldTrace.clear();
+            clientWeldAssembly = "";
+            return;
+        }
         if (!(mc.hitResult instanceof BlockHitResult hit)) return;
         var blocks = WeldGeometry.findAssembly(mc.level, hit.getBlockPos());
         if (blocks.isEmpty()) return;
 
+        String key = blocks.stream().mapToLong(BlockPos::asLong).min().orElse(0L) + ":" + welding;
+        if (!key.equals(clientWeldAssembly)) {
+            clientWeldAssembly = key;
+            clientWeldTrace.clear();
+        }
+
         AABB box = WeldGeometry.bounds(mc.level, blocks);
         Vec3[][] edges = WeldGeometry.visibleFaceEdges(box, mc.player.getEyePosition());
-        VertexConsumer lines = buffer.getBuffer(RenderType.lines());
-        Matrix4f matrix = poseStack.last().pose();
-        com.mojang.blaze3d.systems.RenderSystem.lineWidth(2.5F);
-        for (Vec3[] edge : edges) {
-            Vec3 a = edge[0].subtract(camera);
-            Vec3 b = edge[1].subtract(camera);
-            lines.addVertex(matrix, (float)a.x, (float)a.y, (float)a.z).setColor(255, 255, 255, 235).setNormal(0, 1, 0);
-            lines.addVertex(matrix, (float)b.x, (float)b.y, (float)b.z).setColor(255, 255, 255, 235).setNormal(0, 1, 0);
+        Vec3 eye = mc.player.getEyePosition();
+        Vec3 rayEnd = eye.add(mc.player.getLookAngle().scale(6.0D));
+        boolean tracing = mc.options.keyAttack.isDown();
+        final int samples = 12;
+        com.mojang.blaze3d.systems.RenderSystem.lineWidth(3.0F);
+        for (int edge = 0; edge < edges.length; edge++) {
+            Vec3 a = edges[edge][0], b = edges[edge][1];
+            for (int sample = 0; sample < samples; sample++) {
+                double t0 = (double) sample / samples;
+                double t1 = (double) (sample + 1) / samples;
+                Vec3 p0 = a.lerp(b, t0);
+                Vec3 p1 = a.lerp(b, t1);
+                Vec3 mid = p0.lerp(p1, 0.5);
+                if (tracing && distanceToSegmentSqr(mid, eye, rayEnd) <= 0.30D * 0.30D) {
+                    clientWeldTrace.set(edge * samples + sample);
+                }
+                int color = clientWeldTrace.get(edge * samples + sample)
+                        ? (welding ? 0xFF35E66B : 0xFFFF8B35) : 0xF0FFFFFF;
+                VertexConsumer lines = buffer.getBuffer(RenderType.lines());
+                Matrix4f matrix = poseStack.last().pose();
+                lines.addVertex(matrix, (float)(p0.x-camera.x), (float)(p0.y-camera.y), (float)(p0.z-camera.z))
+                        .setColor((color >> 16) & 255, (color >> 8) & 255, color & 255, (color >>> 24) & 255).setNormal(0, 1, 0);
+                lines.addVertex(matrix, (float)(p1.x-camera.x), (float)(p1.y-camera.y), (float)(p1.z-camera.z))
+                        .setColor((color >> 16) & 255, (color >> 8) & 255, color & 255, (color >>> 24) & 255).setNormal(0, 1, 0);
+            }
         }
         com.mojang.blaze3d.systems.RenderSystem.lineWidth(1.0F);
+    }
+
+    private static double distanceToSegmentSqr(Vec3 point, Vec3 start, Vec3 end) {
+        Vec3 segment = end.subtract(start);
+        double lengthSqr = segment.lengthSqr();
+        if (lengthSqr < 1.0E-9) return point.distanceToSqr(start);
+        double t = Math.max(0.0, Math.min(1.0, point.subtract(start).dot(segment) / lengthSqr));
+        return point.distanceToSqr(start.add(segment.scale(t)));
     }
 
     private static void renderCube(PoseStack poseStack, VertexConsumer vc) {
@@ -229,17 +284,18 @@ public class ClientEvents {
     public static void onRenderGui(RenderGuiEvent.Post event) {
         Minecraft mc = Minecraft.getInstance();
         Player player = mc.player;
-        if (player == null) return;
-        if (mc.screen != null) return;
-        if (!GoggleHelper.isWearingGoggles(player)) return;
-        if (LABELS.isEmpty()) return;
-
+        if (player == null || mc.screen != null) return;
         GuiGraphics gfx = event.getGuiGraphics();
-        Camera camera = mc.gameRenderer.getMainCamera();
-        Vec3 cam = camera.getPosition();
-
         int screenW = mc.getWindow().getGuiScaledWidth();
         int screenH = mc.getWindow().getGuiScaledHeight();
+        if (repairNoticeTicks > 0) {
+            gfx.drawCenteredString(mc.font, "HP блока: " + repairNoticeHp + " / " + repairNoticeMaxHp,
+                    screenW / 2, screenH / 2 + 22, 0xFFFFFFFF);
+        }
+        if (!GoggleHelper.isWearingGoggles(player) || LABELS.isEmpty()) return;
+
+        Camera camera = mc.gameRenderer.getMainCamera();
+        Vec3 cam = camera.getPosition();
 
         Quaternionf camRot = camera.rotation();
         Matrix4f view = new Matrix4f();
@@ -267,6 +323,7 @@ public class ClientEvents {
             int startX = Math.round(screenX - TOTAL_W / 2f);
             int startY = Math.round(screenY);
 
+            gfx.drawString(mc.font, l.hp + " / " + l.maxHp + " HP", startX, startY - 11, 0xFFFFFFFF, false);
             gfx.fill(startX - 2, startY - 2, startX + TOTAL_W + 2, startY + BLOCK_H + 2, BG);
             gfx.fill(startX - 1, startY - 1, startX + TOTAL_W + 1, startY + BLOCK_H + 1, BORDER);
 
@@ -334,6 +391,7 @@ public class ClientEvents {
                 if (item instanceof WeldingTorchItem) {
                     event.setCanceled(true);
                 } else if (item instanceof PlasmaCutterItem && !(mc.hitResult instanceof net.minecraft.world.phys.EntityHitResult)) {
+                    // Keep custom block mining, but allow normal attacks against mobs.
                     event.setCanceled(true);
                 }
             }

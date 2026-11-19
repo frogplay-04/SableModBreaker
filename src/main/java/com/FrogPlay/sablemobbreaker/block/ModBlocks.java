@@ -18,6 +18,7 @@ public class ModBlocks {
             BLOCKS.register("oxygen_shelf", () -> new OxygenShelfBlock(
                     BlockBehaviour.Properties.of()
                             .strength(3.0F)
+                            .requiresCorrectToolForDrops()
                             .noOcclusion()
             ));
 }

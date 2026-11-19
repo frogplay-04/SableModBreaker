@@ -17,6 +17,7 @@ import net.minecraft.world.entity.Mob;
 import net.minecraft.world.entity.MobCategory;
 import net.minecraft.world.entity.PathfinderMob;
 import net.minecraft.world.entity.projectile.Projectile;
+import net.minecraft.world.entity.Entity;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
@@ -44,8 +45,9 @@ public class CommonEvents {
         boolean isMonster = mob.getType().getCategory() == MobCategory.MONSTER;
         boolean isForced = FORCED_ATTACKERS.contains(BuiltInRegistries.ENTITY_TYPE.getKey(mob.getType()));
         boolean hasGun = WeaponClassifier.isHoldingScorchedGunsWeapon(mob) || WeaponClassifier.isHoldingRangedWeapon(mob);
+        boolean naturalShooter = WeaponClassifier.isNaturalShooter(mob);
 
-        if (!isMonster && !isForced && !hasGun) return;
+        if (!isMonster && !isForced && !hasGun && !naturalShooter) return;
 
         boolean alreadyHasTarget = mob.targetSelector.getAvailableGoals().stream()
                 .anyMatch(wrapped -> wrapped.getGoal() instanceof SubLevelTargetGoal);
@@ -69,56 +71,82 @@ public class CommonEvents {
     @SubscribeEvent
     public static void onEntityTick(EntityTickEvent.Pre event) {
         if (event.getEntity().level().isClientSide()) return;
-        if (!(event.getEntity() instanceof Projectile projectile)) return;
+        Entity entity = event.getEntity();
+        if (entity instanceof Projectile projectile) {
+            handleVanillaProjectile(projectile);
+            return;
+        }
+        if (entity.getClass().getName().equals("top.ribs.scguns.entity.projectile.ProjectileEntity")
+                || entity.getClass().getName().startsWith("top.ribs.scguns.entity.projectile.")) {
+            handleScgunsProjectile(entity);
+        }
+    }
 
+    private static void handleVanillaProjectile(Projectile projectile) {
         Level level = projectile.level();
         Vec3 currentPos = projectile.position();
         Vec3 movement = projectile.getDeltaMovement();
-
         AABB projectileBox = projectile.getBoundingBox().expandTowards(movement.x, movement.y, movement.z);
+        if (damageAlongSubLevels(projectile, level, currentPos, movement, projectileBox, calculateProjectileDamage(projectile))) {
+            projectile.discard();
+        }
+    }
 
+    private static void handleScgunsProjectile(Entity projectile) {
+        try {
+            Object rawDamage = projectile.getClass().getMethod("getDamage").invoke(projectile);
+            float baseDamage = rawDamage instanceof Number number ? number.floatValue() : 0.0F;
+            if (baseDamage <= 0.0F) return;
+            Level level = projectile.level();
+            Vec3 currentPos = projectile.position();
+            Vec3 movement = projectile.getDeltaMovement();
+            double speedFactor = Math.max(0.5D, Math.min(3.0D, movement.length() * 2.0D));
+            int damage = Math.max(1, Math.round(baseDamage * (float) speedFactor));
+            AABB projectileBox = projectile.getBoundingBox().expandTowards(movement.x, movement.y, movement.z);
+            boolean hit = damageAlongSubLevels(projectile, level, currentPos, movement, projectileBox, damage);
+            if (hit) projectile.discard();
+        } catch (ReflectiveOperationException ignored) {
+            // Unknown SCGuns projectile subtype: safely skip rather than breaking its own collision logic.
+        }
+    }
+
+    private static boolean damageAlongSubLevels(Entity projectile, Level level, Vec3 currentPos,
+                                                Vec3 movement, AABB projectileBox, int damage) {
+        if (damage <= 0) return false;
         SubLevelContainer container = SubLevelContainer.getContainer(level);
-        if (container == null) return;
+        if (container == null) return false;
 
         for (SubLevel subLevel : container.getAllSubLevels()) {
-            if (subLevel.isRemoved()) continue;
-            if (SubLevelDamageHelper.isRagdoll(subLevel)) continue;
-
+            if (subLevel.isRemoved() || SubLevelDamageHelper.isRagdoll(subLevel)) continue;
             BoundingBox3dc box = subLevel.boundingBox();
             AABB slBox = new AABB(box.minX(), box.minY(), box.minZ(), box.maxX(), box.maxY(), box.maxZ());
+            if (!projectileBox.intersects(slBox)) continue;
 
-            if (projectileBox.intersects(slBox)) {
-                int damage = calculateProjectileDamage(projectile);
-                if (damage <= 0) continue;
-
-                boolean hit = false;
-                Vec3 hitPos = currentPos;
-                double dist = movement.length();
-
-                if (dist > 0) {
-                    Vec3 step = movement.normalize().scale(0.2);
-                    Vec3 pos = currentPos;
-                    for (double d = 0; d <= dist; d += 0.2) {
-                        if (SubLevelDamageHelper.damageBlock(level, subLevel, pos, damage)) {
-                            hit = true;
-                            hitPos = pos;
-                            break;
-                        }
-                        pos = pos.add(step);
+            Vec3 hitPos = currentPos;
+            boolean hit = false;
+            double distance = movement.length();
+            if (distance > 0.0D) {
+                Vec3 step = movement.normalize().scale(0.1D);
+                for (double travelled = 0.0D; travelled <= distance; travelled += 0.1D) {
+                    Vec3 sample = currentPos.add(step.scale(travelled / 0.1D));
+                    if (SubLevelDamageHelper.damageBlock(level, subLevel, sample, damage)) {
+                        hit = true;
+                        hitPos = sample;
+                        break;
                     }
-                } else {
-                    hit = SubLevelDamageHelper.damageBlock(level, subLevel, currentPos, damage);
                 }
-
-                if (hit) {
-                    if (level instanceof ServerLevel serverLevel) {
-                        serverLevel.sendParticles(ParticleTypes.CRIT, hitPos.x, hitPos.y, hitPos.z, 8, 0.1, 0.1, 0.1, 0.2);
-                    }
-                    projectile.discard();
-                    return;
+            } else {
+                hit = SubLevelDamageHelper.damageBlock(level, subLevel, currentPos, damage);
+            }
+            if (hit) {
+                if (level instanceof ServerLevel serverLevel) {
+                    serverLevel.sendParticles(ParticleTypes.CRIT, hitPos.x, hitPos.y, hitPos.z,
+                            8, 0.1, 0.1, 0.1, 0.2);
                 }
+                return true;
             }
         }
+        return false;
     }
 
     private static int calculateProjectileDamage(Projectile projectile) {

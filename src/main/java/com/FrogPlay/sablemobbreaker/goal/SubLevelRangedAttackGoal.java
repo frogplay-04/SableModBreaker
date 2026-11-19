@@ -114,17 +114,27 @@ public class SubLevelRangedAttackGoal extends Goal {
     }
 
     private void fireAttack(Vec3 targetPos) {
-        if (this.mob instanceof Pillager || WeaponClassifier.isHoldingScorchedGunsWeapon(this.mob)) {
+        if (WeaponClassifier.isHoldingScorchedGunsWeapon(this.mob)) {
+            fireScgunsProjectile(targetPos);
+            this.mob.swing(InteractionHand.MAIN_HAND);
+            return;
+        }
+
+        if (this.mob instanceof Pillager) {
             if (ghostTarget == null || ghostTarget.isRemoved()) {
                 ghostTarget = new ArmorStand(this.mob.level(), targetPos.x, targetPos.y, targetPos.z);
                 ghostTarget.setInvisible(true);
                 ghostTarget.setInvulnerable(true);
                 ghostTarget.setNoGravity(true);
                 ghostTarget.setSilent(true);
+                ghostTarget.setInvulnerable(true);
+                ghostTarget.setRemainingFireTicks(0);
                 ghostTarget.noPhysics = true;
                 this.mob.level().addFreshEntity(ghostTarget); // Реальный спавн для ИИ
             }
             ghostTarget.setPos(targetPos.x, targetPos.y, targetPos.z);
+            ghostTarget.setRemainingFireTicks(0);
+            ghostTarget.setInvulnerable(true);
             ghostTarget.setOldPosAndRot();
 
             if (this.mob.getTarget() != ghostTarget) {
@@ -137,9 +147,59 @@ public class SubLevelRangedAttackGoal extends Goal {
             boolean hasValidWeapon = WeaponClassifier.isHoldingRangedWeapon(this.mob) || WeaponClassifier.isNaturalShooter(this.mob);
             if (hasValidWeapon) {
                 LivingEntity virtualTarget = new ArmorStand(this.mob.level(), targetPos.x, targetPos.y, targetPos.z);
+                virtualTarget.setInvulnerable(true);
+                virtualTarget.setRemainingFireTicks(0);
+                virtualTarget.noPhysics = true;
                 rangedMob.performRangedAttack(virtualTarget, 1.0F);
                 this.mob.swing(InteractionHand.MAIN_HAND);
             }
+        }
+    }
+
+
+    private void fireScgunsProjectile(Vec3 targetPos) {
+        try {
+            net.minecraft.world.item.ItemStack weapon = this.mob.getMainHandItem();
+            if (weapon.isEmpty()) weapon = this.mob.getOffhandItem();
+            ClassLoader loader = this.mob.getClass().getClassLoader();
+            Class<?> gunItemClass = Class.forName("top.ribs.scguns.item.GunItem", false, loader);
+            if (!gunItemClass.isInstance(weapon.getItem())) return;
+
+            Class<?> gunClass = Class.forName("top.ribs.scguns.common.Gun", false, loader);
+            java.lang.reflect.Method canShoot = gunClass.getMethod("canShoot", net.minecraft.world.item.ItemStack.class);
+            if (!Boolean.TRUE.equals(canShoot.invoke(null, weapon))) return;
+            Object gun = gunItemClass.getMethod("getModifiedGun", net.minecraft.world.item.ItemStack.class)
+                    .invoke(weapon.getItem(), weapon);
+            if (gun == null) return;
+
+            Class<?> entitiesClass = Class.forName("top.ribs.scguns.init.ModEntities", false, loader);
+            Object holder = entitiesClass.getField("PROJECTILE").get(null);
+            Object entityType = holder.getClass().getMethod("get").invoke(holder);
+            Class<?> projectileClass = Class.forName("top.ribs.scguns.entity.projectile.ProjectileEntity", false, loader);
+            java.lang.reflect.Constructor<?> constructor = projectileClass.getConstructor(
+                    net.minecraft.world.entity.EntityType.class,
+                    net.minecraft.world.level.Level.class,
+                    net.minecraft.world.entity.LivingEntity.class,
+                    net.minecraft.world.item.ItemStack.class,
+                    gunItemClass,
+                    gunClass);
+            Object projectile = constructor.newInstance(entityType, this.mob.level(), this.mob, weapon, weapon.getItem(), gun);
+            if (!(projectile instanceof net.minecraft.world.entity.Entity entity)) return;
+
+            Vec3 origin = this.mob.getEyePosition().add(this.mob.getLookAngle().scale(0.35D));
+            Vec3 direction = targetPos.subtract(origin).normalize();
+            Object projectileData = gunClass.getMethod("getProjectile").invoke(gun);
+            double speed = 3.0D;
+            if (projectileData != null) {
+                Object rawSpeed = projectileData.getClass().getMethod("getSpeed").invoke(projectileData);
+                if (rawSpeed instanceof Number number) speed = Math.max(1.0D, Math.min(8.0D, number.doubleValue()));
+            }
+            entity.setPos(origin.x, origin.y, origin.z);
+            entity.setDeltaMovement(direction.scale(speed));
+            entity.setYRot((float) (Math.toDegrees(Math.atan2(direction.z, direction.x)) - 90.0D));
+            entity.setXRot((float) -Math.toDegrees(Math.asin(direction.y)));
+            this.mob.level().addFreshEntity(entity);
+        } catch (Throwable ignored) {
         }
     }
 

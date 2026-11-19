@@ -35,7 +35,9 @@ public final class WeaponClassifier {
     }
 
     public static boolean isScorchedGunsWeapon(ItemStack stack) {
-        return !stack.isEmpty() && stack.is(SCGUNS_GUN_TAG);
+        if (stack.isEmpty()) return false;
+        ResourceLocation id = BuiltInRegistries.ITEM.getKey(stack.getItem());
+        return id.getNamespace().equals("scguns") || stack.is(SCGUNS_GUN_TAG);
     }
 
     public static boolean isRangedWeapon(ItemStack stack) {
@@ -48,14 +50,18 @@ public final class WeaponClassifier {
         if (isScorchedGunsWeapon(stack)) {
             return true;
         }
+        ResourceLocation registeredId = BuiltInRegistries.ITEM.getKey(item);
+        if (registeredId.getNamespace().equals("scguns")) return true;
 
         ResourceLocation id = BuiltInRegistries.ITEM.getKey(item);
         return id.getNamespace().equals("spartanweaponry");
     }
 
     public static boolean isNaturalShooter(Mob mob) {
+        // Vanilla skeleton/illager ranged mobs are recognized through their held bow/crossbow.
+        // Modded RangedAttackMob implementations (ghast/blaze-like shooters) are natural ranged attackers.
         if (mob instanceof AbstractSkeleton || mob instanceof Illusioner || mob instanceof Pillager) {
-            return false;
+            return isHoldingRangedWeapon(mob);
         }
         return mob instanceof RangedAttackMob;
     }

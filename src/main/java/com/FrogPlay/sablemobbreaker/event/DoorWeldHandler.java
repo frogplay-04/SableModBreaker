@@ -29,7 +29,7 @@ import java.util.concurrent.ConcurrentHashMap;
 
 @EventBusSubscriber(modid = SableMobBreaker.MOD_ID)
 public final class DoorWeldHandler {
-    private static final int SAMPLES_PER_EDGE = 8;
+    private static final int SAMPLES_PER_EDGE = 12;
     private static final double TRACE_RADIUS_SQR = 0.30 * 0.30;
     private static final double REACH = 6.0;
     private static final Map<UUID, TraceSession> SESSIONS = new ConcurrentHashMap<>();

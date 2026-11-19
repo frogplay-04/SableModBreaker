@@ -61,6 +61,8 @@ public class BlockPlaceHandler {
                                 localPos.getX(), localPos.getY(), localPos.getZ(),
                                 oldState, newState
                         );
+                        // Remove the persistent BrokenBlockEntity that stores the old block data.
+                        chunk.removeBlockEntity(localPos);
 
                         int sectionIndex = chunk.getSectionIndex(localPos.getY());
                         LevelChunkSection section = chunk.getSection(sectionIndex);

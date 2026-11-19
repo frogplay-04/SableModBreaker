@@ -2,6 +2,7 @@ package com.FrogPlay.sablemobbreaker.util;
 
 import com.FrogPlay.sablemobbreaker.SableMobBreaker;
 import com.FrogPlay.sablemobbreaker.block.ModBlocks;
+import com.FrogPlay.sablemobbreaker.block.BrokenBlockEntity;
 import com.FrogPlay.sablemobbreaker.network.BlockHealthSyncPacket;
 import dev.ryanhcode.sable.api.sublevel.SubLevelContainer;
 import dev.ryanhcode.sable.sublevel.SubLevel;
@@ -177,6 +178,11 @@ public class SubLevelDamageHelper {
                             LevelChunkSection section = sections[sectionIndex];
                             if (section != null) {
                                 section.setBlockState(targetBlock.getX() & 15, targetBlock.getY() & 15, targetBlock.getZ() & 15, brokenState);
+                                BrokenBlockEntity brokenBe = new BrokenBlockEntity(targetBlock, brokenState);
+                                brokenBe.setOriginalState(oldState);
+                                brokenBe.setOriginalNbt(savedNbt);
+                                chunk.setBlockEntity(brokenBe);
+                                brokenBe.setChanged();
                                 chunk.setUnsaved(true);
                             }
                         }
@@ -193,7 +199,7 @@ public class SubLevelDamageHelper {
                         }
                     }
                 } catch (Throwable t) {
-                    SableMobBreaker.LOGGER.error("[SMB] Ошибка удаления: {}", t.toString());
+                    SableMobBreaker.LOGGER.error("[SMB] Deletion error: {}", t.toString());
                 }
             }
 
@@ -372,7 +378,7 @@ public class SubLevelDamageHelper {
 
             return false;
         } catch (RuntimeException exception) {
-            SableMobBreaker.LOGGER.warn("[SMB] Не удалось определить ragdoll SubLevel", exception);
+            SableMobBreaker.LOGGER.warn("[SMB] Failed to determine ragdoll SubLevel", exception);
             return false;
         }
     }
