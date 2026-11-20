@@ -14,6 +14,7 @@ import com.FrogPlay.sablemobbreaker.network.BlockHealthSyncPacket;
 import com.FrogPlay.sablemobbreaker.network.RepairHpNoticePacket;
 import com.FrogPlay.sablemobbreaker.util.BlockHealthManager;
 import com.FrogPlay.sablemobbreaker.util.SubLevelDamageHelper;
+import com.FrogPlay.sablemobbreaker.util.WeldManager;
 import dev.ryanhcode.sable.api.sublevel.SubLevelContainer;
 import dev.ryanhcode.sable.companion.math.BoundingBox3dc;
 import dev.ryanhcode.sable.sublevel.SubLevel;
@@ -107,7 +108,6 @@ public class WeldingTorchHandler {
 
     @SubscribeEvent
     public static void onAttackEntity(AttackEntityEvent event) {
-        // Welding torch is not a melee weapon; plasma cutter keeps normal entity attacks.
         if (event.getEntity().getMainHandItem().getItem() instanceof WeldingTorchItem) {
             event.setCanceled(true);
         }
@@ -282,7 +282,18 @@ public class WeldingTorchHandler {
                 BlockPos hitPos = hitResult.getBlockPos();
                 BlockState hitState = level.getBlockState(hitPos);
 
-                if (!hitState.isAir() && hitState.getDestroySpeed(level, hitPos) >= 0) {
+                if (WeldManager.isWelded(level, hitPos)) {
+                    if (data.pos != null && level instanceof ServerLevel serverLevel) {
+                        serverLevel.destroyBlockProgress(player.getId(), data.pos, -1);
+                    }
+                    data.pos = null;
+                    data.state = null;
+                    data.subLevel = null;
+                    data.subLevelLocalPos = null;
+                    data.progress = 0.0F;
+                    data.subLevelDamageRemainder = 0.0F;
+                    hitSomething = false;
+                } else if (!hitState.isAir() && hitState.getDestroySpeed(level, hitPos) >= 0) {
                     if (!hitPos.equals(data.pos) || data.subLevel != null) {
                         data.pos = hitPos.immutable();
                         data.state = hitState;
@@ -351,9 +362,6 @@ public class WeldingTorchHandler {
                             BlockState currentState = subLevelChunk.getBlockState(data.subLevelLocalPos);
                             if (currentState.isAir() || currentState.is(ModBlocks.BROKEN_BLOCK.get())) {
                                 hitSomething = false;
-                            } else {
-                                // Ванильная формула добычи: скорость инструмента, твёрдость,
-                                // эффекты игрока и корректность инструмента для блока.
                                 float destroyProgress = currentState.getDestroyProgress(
                                         player, subLevelChunk, data.subLevelLocalPos);
 
@@ -373,8 +381,6 @@ public class WeldingTorchHandler {
                                         SubLevelDamageHelper.damageBlockExact(
                                                 level, data.subLevel, blockCenterWorld, damage);
                                     }
-
-                                    // Helper заменяет Sable-блок на BROKEN_BLOCK при достижении 0 HP.
                                     Vec3 blockCenterWorld = data.subLevel.logicalPose().transformPosition(
                                             new Vec3(data.subLevelLocalPos.getX() + 0.5,
                                                     data.subLevelLocalPos.getY() + 0.5,
@@ -662,13 +668,8 @@ public class WeldingTorchHandler {
         }
         return true;
     }
-
-    /**
-     * Create engineer's goggles already provide block information, so the temporary
-     * repair HP notice is only shown to players who are not wearing them.
-     */
     private static boolean isWearingCreateGoggles(ServerPlayer player) {
-        ItemStack headStack = player.getItemBySlot(EquipmentSlot.HEAD);
+        ItemStack headStack = player.getItemBySlot(net.minecraft.world.entity.EquipmentSlot.HEAD);
         ResourceLocation itemId = BuiltInRegistries.ITEM.getKey(headStack.getItem());
         return ResourceLocation.fromNamespaceAndPath("create", "goggles").equals(itemId);
     }

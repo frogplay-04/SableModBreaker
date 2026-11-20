@@ -133,7 +133,7 @@ public class ClientEvents {
             if (state == null || state.isAir()) continue;
 
             int progress = (int) (10.0F * (1.0F - (float) data.hp() / data.maxHp()));
-            if (progress <= 0) continue;
+            if (progress <= 0) progress = 1;
             if (progress > 9) progress = 9;
 
             ResourceLocation texture = ResourceLocation.withDefaultNamespace("textures/block/destroy_stage_" + progress + ".png");
@@ -391,7 +391,6 @@ public class ClientEvents {
                 if (item instanceof WeldingTorchItem) {
                     event.setCanceled(true);
                 } else if (item instanceof PlasmaCutterItem && !(mc.hitResult instanceof net.minecraft.world.phys.EntityHitResult)) {
-                    // Keep custom block mining, but allow normal attacks against mobs.
                     event.setCanceled(true);
                 }
             }
