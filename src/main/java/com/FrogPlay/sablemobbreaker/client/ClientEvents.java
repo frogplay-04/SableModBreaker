@@ -4,6 +4,7 @@ import com.FrogPlay.sablemobbreaker.SableMobBreaker;
 import com.FrogPlay.sablemobbreaker.item.PlasmaCutterItem;
 import com.FrogPlay.sablemobbreaker.item.WeldingTorchItem;
 import com.FrogPlay.sablemobbreaker.network.SetTorchStatePacket;
+import com.FrogPlay.sablemobbreaker.network.SetToolUsePacket;
 import com.FrogPlay.sablemobbreaker.util.WeldGeometry;
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.blaze3d.vertex.VertexConsumer;
@@ -62,18 +63,22 @@ public class ClientEvents {
     private record Label(double x, double y, double z, int hp, int maxHp, double distSq) {}
 
     private static final List<Label> LABELS = new ArrayList<>();
+    private static final java.util.Map<BlockHealthClientData.Key, Integer> RECENTLY_REPAIRED = new java.util.concurrent.ConcurrentHashMap<>();
     private static int tickCounter = RESCAN_INTERVAL;
     private static boolean wasAttackDown = false;
+    private static boolean wasUseDown = false;
     private static BitSet clientWeldTrace = new BitSet(48);
     private static String clientWeldAssembly = "";
     private static int repairNoticeTicks = 0;
     private static int repairNoticeHp = 0;
     private static int repairNoticeMaxHp = 0;
 
-    public static void showRepairHp(int hp, int maxHp) {
+    public static void showRepairHp(UUID subLevelId, int x, int y, int z, int hp, int maxHp) {
         repairNoticeHp = hp;
         repairNoticeMaxHp = maxHp;
         repairNoticeTicks = 20;
+        RECENTLY_REPAIRED.put(new BlockHealthClientData.Key(subLevelId, x, y, z), 40);
+        markDirty();
     }
 
     public static void markDirty() {
@@ -85,8 +90,11 @@ public class ClientEvents {
         Minecraft mc = Minecraft.getInstance();
         Player player = mc.player;
         if (repairNoticeTicks > 0) repairNoticeTicks--;
+        RECENTLY_REPAIRED.replaceAll((key, ticks) -> ticks - 1);
+        RECENTLY_REPAIRED.entrySet().removeIf(entry -> entry.getValue() <= 0);
         if (player == null) {
             wasAttackDown = false;
+            wasUseDown = false;
             return;
         }
 
@@ -101,6 +109,16 @@ public class ClientEvents {
                 PacketDistributor.sendToServer(new SetTorchStatePacket(false));
             }
             wasAttackDown = isAttackDown;
+        }
+
+        boolean isUseDown = mc.options.keyUse.isDown();
+        if (isUseDown != wasUseDown) {
+            if (isHoldingTool) {
+                PacketDistributor.sendToServer(new SetToolUsePacket(isUseDown));
+            } else if (wasUseDown) {
+                PacketDistributor.sendToServer(new SetToolUsePacket(false));
+            }
+            wasUseDown = isUseDown;
         }
 
         if (--tickCounter <= 0) {
@@ -130,7 +148,8 @@ public class ClientEvents {
             if (sl == null) continue;
 
             BlockState state = SableMobBreakerClient.getBlockStateAt(key.subLevelId(), key.x(), key.y(), key.z());
-            if (state == null || state.isAir()) continue;
+            if (state == null || state.isAir()
+                    || state.is(com.FrogPlay.sablemobbreaker.block.ModBlocks.BROKEN_BLOCK.get())) continue;
 
             int progress = (int) (10.0F * (1.0F - (float) data.hp() / data.maxHp()));
             if (progress <= 0) progress = 1;
@@ -292,7 +311,7 @@ public class ClientEvents {
             gfx.drawCenteredString(mc.font, "HP блока: " + repairNoticeHp + " / " + repairNoticeMaxHp,
                     screenW / 2, screenH / 2 + 22, 0xFFFFFFFF);
         }
-        if (!GoggleHelper.isWearingGoggles(player) || LABELS.isEmpty()) return;
+        if ((!GoggleHelper.isWearingGoggles(player) && RECENTLY_REPAIRED.isEmpty()) || LABELS.isEmpty()) return;
 
         Camera camera = mc.gameRenderer.getMainCamera();
         Vec3 cam = camera.getPosition();
@@ -350,15 +369,15 @@ public class ClientEvents {
 
     private static void rescan(Player player) {
         LABELS.clear();
-        if (!GoggleHelper.isWearingGoggles(player)) return;
 
         Minecraft mc = Minecraft.getInstance();
         if (mc.level == null) return;
 
+        // Clean stale entries for every player, not only players wearing Engineer's Goggles.
         var stale = new ArrayList<BlockHealthClientData.Key>();
         for (var key : BlockHealthClientData.getAll().keySet()) {
             BlockState state = SableMobBreakerClient.getBlockStateAt(key.subLevelId(), key.x(), key.y(), key.z());
-            if (state != null && state.isAir()) {
+            if (state == null || state.isAir() || state.is(com.FrogPlay.sablemobbreaker.block.ModBlocks.BROKEN_BLOCK.get())) {
                 stale.add(key);
             }
         }
@@ -366,10 +385,14 @@ public class ClientEvents {
             BlockHealthClientData.remove(key);
         }
 
+        boolean wearingGoggles = GoggleHelper.isWearingGoggles(player);
+        if (!wearingGoggles && RECENTLY_REPAIRED.isEmpty()) return;
+
         double radiusSq = RADIUS * RADIUS;
         for (var e : BlockHealthClientData.getAll().entrySet()) {
             var key = e.getKey();
             var entry = e.getValue();
+            if (!wearingGoggles && !RECENTLY_REPAIRED.containsKey(key)) continue;
             if (entry.hp() >= entry.maxHp()) continue;
 
             Vec3 wp = SableMobBreakerClient.getBlockWorldPos(key.subLevelId(), key.x(), key.y(), key.z());

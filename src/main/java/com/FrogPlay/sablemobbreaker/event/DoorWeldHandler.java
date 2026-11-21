@@ -33,6 +33,19 @@ public final class DoorWeldHandler {
     private static final double TRACE_RADIUS_SQR = 0.30 * 0.30;
     private static final double REACH = 6.0;
     private static final Map<UUID, TraceSession> SESSIONS = new ConcurrentHashMap<>();
+    private static final Set<UUID> RIGHT_USE = ConcurrentHashMap.newKeySet();
+
+    public static void setRightUse(UUID playerId, boolean pressed) {
+        if (pressed) RIGHT_USE.add(playerId);
+        else {
+            RIGHT_USE.remove(playerId);
+            SESSIONS.remove(playerId);
+        }
+    }
+
+    public static boolean isRightUse(UUID playerId) {
+        return RIGHT_USE.contains(playerId);
+    }
 
     private static final class TraceSession {
         final String assemblyKey;
@@ -60,8 +73,9 @@ public final class DoorWeldHandler {
         if (player.level().isClientSide()) return;
 
         ItemStack held = player.getMainHandItem();
-        boolean welding = held.getItem() instanceof WeldingTorchItem && WeldingTorchItem.isOn(held);
-        boolean cutting = held.getItem() instanceof PlasmaCutterItem && PlasmaCutterItem.isOn(held);
+        boolean rightUse = isRightUse(player.getUUID());
+        boolean welding = rightUse && held.getItem() instanceof WeldingTorchItem;
+        boolean cutting = rightUse && held.getItem() instanceof PlasmaCutterItem;
         if (!welding && !cutting) {
             SESSIONS.remove(player.getUUID());
             return;
@@ -144,15 +158,21 @@ public final class DoorWeldHandler {
         BlockPos pos = event.getPos();
         ItemStack stack = event.getItemStack();
 
+        boolean toolHeld = stack.getItem() instanceof WeldingTorchItem
+                || stack.getItem() instanceof PlasmaCutterItem;
+        boolean cutterUnwelding = stack.getItem() instanceof PlasmaCutterItem
+                && isRightUse(event.getEntity().getUUID());
+
+        if (toolHeld && event.getEntity().isShiftKeyDown()) return;
+
         if (WeldManager.isWelded(level, pos)) {
             event.setCanceled(true);
-            event.setCancellationResult(InteractionResult.FAIL);
+            event.setCancellationResult(cutterUnwelding ? InteractionResult.SUCCESS : InteractionResult.FAIL);
             return;
         }
 
-        boolean toolActive = (stack.getItem() instanceof WeldingTorchItem && WeldingTorchItem.isOn(stack))
-                || (stack.getItem() instanceof PlasmaCutterItem && PlasmaCutterItem.isOn(stack));
-        if (toolActive && WeldGeometry.isEligible(level.getBlockState(pos))) {
+        if (toolHeld && !event.getEntity().isShiftKeyDown()
+                && WeldGeometry.isEligible(level.getBlockState(pos))) {
             event.setCanceled(true);
             event.setCancellationResult(InteractionResult.SUCCESS);
         }

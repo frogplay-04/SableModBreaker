@@ -37,10 +37,15 @@ public record BlockHealthSyncPacket(UUID subLevelId, int x, int y, int z, int hp
     public static void handle(BlockHealthSyncPacket packet, IPayloadContext context) {
         context.enqueueWork(() -> {
             try {
-                BlockHealthClientData.put(
-                        packet.subLevelId(), packet.x(), packet.y(), packet.z(),
-                        packet.hp(), packet.maxHp()
-                );
+                if (packet.maxHp() > 0 && packet.hp() >= packet.maxHp()) {
+                    BlockHealthClientData.remove(new BlockHealthClientData.Key(
+                            packet.subLevelId(), packet.x(), packet.y(), packet.z()));
+                } else {
+                    BlockHealthClientData.put(
+                            packet.subLevelId(), packet.x(), packet.y(), packet.z(),
+                            packet.hp(), packet.maxHp()
+                    );
+                }
 
                 ClientEvents.markDirty();
             } catch (Throwable t) {

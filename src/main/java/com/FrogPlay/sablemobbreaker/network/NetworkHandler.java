@@ -30,5 +30,11 @@ public class NetworkHandler {
                 SetTorchStatePacket.STREAM_CODEC,
                 SetTorchStatePacket::handle
         );
+
+        registrar.playToServer(
+                SetToolUsePacket.TYPE,
+                SetToolUsePacket.STREAM_CODEC,
+                SetToolUsePacket::handle
+        );
     }
 }

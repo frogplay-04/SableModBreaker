@@ -3,6 +3,7 @@ package com.FrogPlay.sablemobbreaker.util;
 import dev.ryanhcode.sable.api.sublevel.SubLevelContainer;
 import dev.ryanhcode.sable.companion.math.BoundingBox3d;
 import dev.ryanhcode.sable.sublevel.SubLevel;
+import com.FrogPlay.sablemobbreaker.block.ModBlocks;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.ClipContext;
@@ -45,7 +46,8 @@ public class SubLevelTargetHelper {
                         for (int ly = minY; ly < maxY; ly++) {
                             BlockPos localPos = new BlockPos(cp.getMinBlockX() + lx, ly, cp.getMinBlockZ() + lz);
                             var state = chunk.getBlockState(localPos);
-                            if (state.isAir()) continue;
+                            if (state.isAir() || state.is(ModBlocks.BROKEN_BLOCK.get())
+                                    || SubLevelDamageHelper.isIgnoredBlock(state)) continue;
 
                             Vec3 blockWorldPos = localToWorld(subLevel, localPos);
                             double distSqr = worldPos.distanceToSqr(blockWorldPos);

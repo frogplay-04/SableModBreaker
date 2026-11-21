@@ -307,47 +307,63 @@ public class WeldingTorchHandler {
                     hitSomething = true;
                 }
             } else {
+                // Sable blocks are not part of the vanilla world ray trace. Walk the player's
+                // ray through each intersected SubLevel and select the first real local block.
                 SubLevelContainer container = SubLevelContainer.getContainer(level);
                 if (container != null) {
+                    SubLevel bestSubLevel = null;
+                    BlockPos bestLocalPos = null;
+                    double bestDistance = Double.MAX_VALUE;
+
                     for (SubLevel sl : container.getAllSubLevels()) {
-                        if (sl.isRemoved() || !sl.boundingBox().contains(targetVec.x, targetVec.y, targetVec.z)) {
-                            continue;
+                        if (sl.isRemoved()) continue;
+                        var bounds = sl.boundingBox();
+                        AABB worldBounds = new AABB(bounds.minX(), bounds.minY(), bounds.minZ(),
+                                bounds.maxX(), bounds.maxY(), bounds.maxZ());
+                        java.util.Optional<Vec3> boundsHit = worldBounds.clip(eyePos, targetVec);
+                        if (boundsHit.isEmpty()) continue;
+
+                        double enterDistance = eyePos.distanceTo(boundsHit.get());
+                        for (double distance = enterDistance; distance <= 4.5D; distance += 0.05D) {
+                            Vec3 sample = eyePos.add(lookVec.scale(distance));
+                            Vec3 localVec = sl.logicalPose().transformPositionInverse(sample);
+                            BlockPos localBlockPos = BlockPos.containing(localVec.x, localVec.y, localVec.z);
+                            ChunkPos chunkPos = new ChunkPos(localBlockPos.getX() >> 4, localBlockPos.getZ() >> 4);
+                            if (!container.inBounds(chunkPos)) continue;
+                            LevelChunk subLevelChunk = container.getChunk(chunkPos);
+                            if (subLevelChunk == null) continue;
+
+                            BlockState subLevelState = subLevelChunk.getBlockState(localBlockPos);
+                            if (subLevelState.isAir() || subLevelState.is(ModBlocks.BROKEN_BLOCK.get())
+                                    || SubLevelDamageHelper.isIgnoredBlock(subLevelState)
+                                    || subLevelState.getDestroySpeed(subLevelChunk, localBlockPos) < 0.0F) continue;
+
+                            if (distance < bestDistance) {
+                                bestDistance = distance;
+                                bestSubLevel = sl;
+                                bestLocalPos = localBlockPos.immutable();
+                            }
+                            break;
                         }
+                    }
 
-                        Vec3 localVec = sl.logicalPose().transformPositionInverse(targetVec);
-                        BlockPos localBlockPos = BlockPos.containing(localVec.x, localVec.y, localVec.z);
-                        ChunkPos chunkPos = new ChunkPos(localBlockPos.getX() >> 4, localBlockPos.getZ() >> 4);
-                        if (!container.inBounds(chunkPos)) continue;
-
-                        LevelChunk subLevelChunk = container.getChunk(chunkPos);
-                        if (subLevelChunk == null) continue;
-
-                        BlockState subLevelState = subLevelChunk.getBlockState(localBlockPos);
-                        if (subLevelState.isAir() || subLevelState.is(ModBlocks.BROKEN_BLOCK.get())
-                                || SubLevelDamageHelper.isIgnoredBlock(subLevelState)
-                                || subLevelState.getDestroySpeed(subLevelChunk, localBlockPos) < 0.0F) {
-                            continue;
-                        }
-
-                        boolean changedTarget = data.subLevel != sl
+                    if (bestSubLevel != null && bestLocalPos != null) {
+                        boolean changedTarget = data.subLevel != bestSubLevel
                                 || data.subLevelLocalPos == null
-                                || !data.subLevelLocalPos.equals(localBlockPos);
+                                || !data.subLevelLocalPos.equals(bestLocalPos);
+                        data.subLevel = bestSubLevel;
+                        data.subLevelLocalPos = bestLocalPos;
+                        data.pos = BlockPos.containing(eyePos.add(lookVec.scale(bestDistance)));
+                        data.state = getSubLevelBlockState(container, bestLocalPos);
                         if (changedTarget) {
-                            data.subLevel = sl;
-                            data.subLevelLocalPos = localBlockPos.immutable();
-                            data.pos = BlockPos.containing(targetVec);
-                            data.state = subLevelState;
                             data.progress = 0.0F;
                             data.subLevelDamageRemainder = 0.0F;
-                        } else {
-                            data.state = subLevelState;
                         }
-
-                        hitSomething = true;
-                        break;
+                        hitSomething = data.state != null && !data.state.isAir();
                     }
                 }
             }
+
 
             if (hitSomething && data.state != null) {
                 if (data.subLevel != null && data.subLevelLocalPos != null) {
@@ -360,31 +376,20 @@ public class WeldingTorchHandler {
 
                         if (subLevelChunk != null) {
                             BlockState currentState = subLevelChunk.getBlockState(data.subLevelLocalPos);
-                            if (currentState.isAir() || currentState.is(ModBlocks.BROKEN_BLOCK.get())) {
+                            if (currentState.isAir() || currentState.is(ModBlocks.BROKEN_BLOCK.get())
+                                    || SubLevelDamageHelper.isIgnoredBlock(currentState)
+                                    || currentState.getDestroySpeed(subLevelChunk, data.subLevelLocalPos) < 0.0F) {
                                 hitSomething = false;
-                                float destroyProgress = currentState.getDestroyProgress(
-                                        player, subLevelChunk, data.subLevelLocalPos);
-
-                                if (destroyProgress > 0.0F && Float.isFinite(destroyProgress)) {
-                                    data.progress += destroyProgress;
-                                    BlockEntity blockEntity = subLevelChunk.getBlockEntity(data.subLevelLocalPos);
-                                    int maxHp = BlockHealthManager.getMaxHp(currentState, blockEntity);
-                                    data.subLevelDamageRemainder += Math.max(0.25F, destroyProgress * maxHp * 0.25F);
-
-                                    int damage = (int) data.subLevelDamageRemainder;
-                                    if (damage > 0) {
-                                        data.subLevelDamageRemainder -= damage;
-                                        Vec3 blockCenterWorld = data.subLevel.logicalPose().transformPosition(
-                                                new Vec3(data.subLevelLocalPos.getX() + 0.5,
-                                                        data.subLevelLocalPos.getY() + 0.5,
-                                                        data.subLevelLocalPos.getZ() + 0.5));
-                                        SubLevelDamageHelper.damageBlockExact(
-                                                level, data.subLevel, blockCenterWorld, damage);
-                                    }
-                                    Vec3 blockCenterWorld = data.subLevel.logicalPose().transformPosition(
-                                            new Vec3(data.subLevelLocalPos.getX() + 0.5,
-                                                    data.subLevelLocalPos.getY() + 0.5,
-                                                    data.subLevelLocalPos.getZ() + 0.5));
+                            } else {
+                                // Sable-конструкции получают тот же учёт HP, что и при ударах мобов.
+                                // Один импульс плазмореза снимает ровно 5 HP.
+                                Vec3 blockCenterWorld = data.subLevel.logicalPose().transformPosition(
+                                        new Vec3(data.subLevelLocalPos.getX() + 0.5,
+                                                data.subLevelLocalPos.getY() + 0.5,
+                                                data.subLevelLocalPos.getZ() + 0.5));
+                                if (player.tickCount % 5 == 0) {
+                                    SubLevelDamageHelper.damageBlockExact(
+                                            level, data.subLevel, blockCenterWorld, 5);
                                     if (SubLevelDamageHelper.isBlockDead(level, data.subLevel, blockCenterWorld)) {
                                         data.progress = 0.0F;
                                         data.subLevelDamageRemainder = 0.0F;
@@ -463,6 +468,13 @@ public class WeldingTorchHandler {
         } else {
             MINING_DATA.remove(player.getUUID());
         }
+    }
+
+    private static BlockState getSubLevelBlockState(SubLevelContainer container, BlockPos pos) {
+        ChunkPos cp = new ChunkPos(pos.getX() >> 4, pos.getZ() >> 4);
+        if (!container.inBounds(cp)) return null;
+        LevelChunk chunk = container.getChunk(cp);
+        return chunk == null ? null : chunk.getBlockState(pos);
     }
 
     @SubscribeEvent
@@ -645,7 +657,7 @@ public class WeldingTorchHandler {
                 BlockHealthManager.setHp(subId, plotGridBlockPos.getX(), y, plotGridBlockPos.getZ(), restoredHp);
                 sendRepairUpdate(serverLevel, plotGridBlockPos, restoredState, subId, restoredHp, maxHp, hitVec);
                 if (player instanceof ServerPlayer serverPlayer && !isWearingCreateGoggles(serverPlayer)) {
-                    PacketDistributor.sendToPlayer(serverPlayer, new RepairHpNoticePacket(restoredHp, maxHp));
+                    PacketDistributor.sendToPlayer(serverPlayer, new RepairHpNoticePacket(subId, plotGridBlockPos.getX(), y, plotGridBlockPos.getZ(), restoredHp, maxHp));
                 }
                 return true;
             } catch (Throwable t) {
@@ -664,13 +676,54 @@ public class WeldingTorchHandler {
         BlockHealthManager.setHp(subId, plotGridBlockPos.getX(), y, plotGridBlockPos.getZ(), newHp);
         sendRepairUpdate(serverLevel, plotGridBlockPos, state, subId, newHp, maxHp, hitVec);
         if (player instanceof ServerPlayer serverPlayer && !isWearingCreateGoggles(serverPlayer)) {
-            PacketDistributor.sendToPlayer(serverPlayer, new RepairHpNoticePacket(newHp, maxHp));
+            PacketDistributor.sendToPlayer(serverPlayer, new RepairHpNoticePacket(subId, plotGridBlockPos.getX(), y, plotGridBlockPos.getZ(), newHp, maxHp));
         }
         return true;
     }
     private static boolean isWearingCreateGoggles(ServerPlayer player) {
         ItemStack headStack = player.getItemBySlot(net.minecraft.world.entity.EquipmentSlot.HEAD);
-        ResourceLocation itemId = BuiltInRegistries.ITEM.getKey(headStack.getItem());
+        if (isCreateGogglesItem(headStack)) return true;
+
+        if (net.neoforged.fml.ModList.get().isLoaded("curios")) {
+            try {
+                Class<?> curiosApiClass = Class.forName("top.theillusivec4.curios.api.CuriosApi");
+                java.lang.reflect.Method getInvMethod = curiosApiClass.getMethod("getCuriosInventory", net.minecraft.world.entity.LivingEntity.class);
+                Object lazyOptional = getInvMethod.invoke(null, player);
+
+                java.lang.reflect.Method resolveMethod = lazyOptional.getClass().getMethod("resolve");
+                java.util.Optional<?> optInv = (java.util.Optional<?>) resolveMethod.invoke(lazyOptional);
+
+                if (optInv.isPresent()) {
+                    Object inventory = optInv.get();
+                    java.lang.reflect.Method getStacksHandler = inventory.getClass().getMethod("getStacksHandler", String.class);
+                    Object handlerOpt = getStacksHandler.invoke(inventory, "head");
+                    java.util.Optional<?> optHandler = (java.util.Optional<?>) resolveMethod.invoke(handlerOpt);
+
+                    if (optHandler.isPresent()) {
+                        Object handler = optHandler.get();
+                        java.lang.reflect.Method getStacksMethod = handler.getClass().getMethod("getStacks");
+                        Object stacks = getStacksMethod.invoke(handler);
+
+                        java.lang.reflect.Method getSlotsMethod = stacks.getClass().getMethod("getSlots");
+                        java.lang.reflect.Method getStackMethod = stacks.getClass().getMethod("getStackInSlot", int.class);
+
+                        int slots = (int) getSlotsMethod.invoke(stacks);
+                        for (int i = 0; i < slots; i++) {
+                            ItemStack stack = (ItemStack) getStackMethod.invoke(stacks, i);
+                            if (isCreateGogglesItem(stack)) return true;
+                        }
+                    }
+                }
+            } catch (Throwable ignored) {
+            }
+        }
+
+        return false;
+    }
+
+    private static boolean isCreateGogglesItem(ItemStack stack) {
+        if (stack.isEmpty()) return false;
+        ResourceLocation itemId = BuiltInRegistries.ITEM.getKey(stack.getItem());
         return ResourceLocation.fromNamespaceAndPath("create", "goggles").equals(itemId);
     }
 

@@ -14,6 +14,8 @@ import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.chunk.LevelChunk;
+import net.minecraft.world.level.block.entity.BlockEntity;
+import net.minecraft.world.level.block.EntityBlock;
 import net.minecraft.world.level.chunk.LevelChunkSection;
 import net.minecraft.world.phys.Vec3;
 import net.neoforged.bus.api.SubscribeEvent;
@@ -43,7 +45,6 @@ public class BlockPlaceHandler {
         for (SubLevel sl : container.getAllSubLevels()) {
             if (sl.isRemoved()) continue;
             UUID id = sl.getUniqueId();
-            if (id == null) continue;
 
             Vec3 local = sl.logicalPose().transformPositionInverse(Vec3.atCenterOf(worldPos));
             BlockPos localPos = BlockPos.containing(local.x, local.y, local.z);
@@ -61,20 +62,25 @@ public class BlockPlaceHandler {
                                 localPos.getX(), localPos.getY(), localPos.getZ(),
                                 oldState, newState
                         );
-                        // Remove the persistent BrokenBlockEntity that stores the old block data.
                         chunk.removeBlockEntity(localPos);
 
                         int sectionIndex = chunk.getSectionIndex(localPos.getY());
                         LevelChunkSection section = chunk.getSection(sectionIndex);
-                        if (section != null) {
-                            section.setBlockState(
-                                    localPos.getX() & 15,
-                                    localPos.getY() & 15,
-                                    localPos.getZ() & 15,
-                                    newState
-                            );
-                            chunk.setUnsaved(true);
+                        section.setBlockState(
+                                localPos.getX() & 15,
+                                localPos.getY() & 15,
+                                localPos.getZ() & 15,
+                                newState
+                        );
+
+                        if (newState.hasBlockEntity()
+                                && newState.getBlock() instanceof EntityBlock entityBlock) {
+                            BlockEntity replacementEntity = entityBlock.newBlockEntity(localPos, newState);
+                            if (replacementEntity != null) {
+                                chunk.setBlockEntity(replacementEntity);
+                            }
                         }
+                        chunk.setUnsaved(true);
 
                         BlockHealthManager.removeDestroyedBlock(id, localPos.getX(), localPos.getY(), localPos.getZ());
                         BlockHealthManager.reset(id, localPos.getX(), localPos.getY(), localPos.getZ());
@@ -88,7 +94,7 @@ public class BlockPlaceHandler {
                             }
                         }
                     } catch (Throwable t) {
-                        SableMobBreaker.LOGGER.error("[SMB] Ошибка установки блока на место сломанного: {}", t.toString());
+                        SableMobBreaker.LOGGER.error("[SMB] Error when installing a unit to replace a broken one: {}", t.toString());
                     }
                 }
                 return;

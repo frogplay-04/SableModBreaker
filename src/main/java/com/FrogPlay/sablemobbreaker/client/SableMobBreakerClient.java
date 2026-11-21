@@ -50,6 +50,6 @@ public final class SableMobBreakerClient {
         LevelChunk chunk = container.getChunk(cp);
         if (chunk == null) return null;
 
-        return chunk.getBlockState(new BlockPos(x & 15, y, z & 15));
+        return chunk.getBlockState(new BlockPos(x, y, z));
     }
 }

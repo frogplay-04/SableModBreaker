@@ -11,11 +11,13 @@ import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.InteractionHand;
+import net.minecraft.world.InteractionResult;
 import net.minecraft.world.InteractionResultHolder;
 import net.minecraft.world.SimpleMenuProvider;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.context.UseOnContext;
 import net.minecraft.world.item.TooltipFlag;
 import net.minecraft.world.item.component.CustomData;
 import net.minecraft.world.level.Level;
@@ -29,8 +31,25 @@ public class WeldingTorchItem extends Item {
     }
 
     @Override
+    public InteractionResult useOn(UseOnContext context) {
+        Player player = context.getPlayer();
+        if (player == null || !player.isShiftKeyDown()) return InteractionResult.PASS;
+        ItemStack stack = context.getItemInHand();
+        if (!context.getLevel().isClientSide && player instanceof ServerPlayer serverPlayer) {
+            serverPlayer.openMenu(new SimpleMenuProvider(
+                    (id, inv, p) -> new WeldingTorchMenu(id, inv, stack),
+                    Component.translatable("container.sablemobbreaker.welding_torch")
+            ), (RegistryFriendlyByteBuf buf) -> ItemStack.STREAM_CODEC.encode(buf, stack));
+        }
+        return InteractionResult.sidedSuccess(context.getLevel().isClientSide);
+    }
+
+    @Override
     public InteractionResultHolder<ItemStack> use(Level level, Player player, InteractionHand hand) {
         ItemStack stack = player.getItemInHand(hand);
+        if (!player.isShiftKeyDown()) {
+            return InteractionResultHolder.pass(stack);
+        }
         if (!level.isClientSide) {
             if (player instanceof ServerPlayer sp) {
                 sp.openMenu(new SimpleMenuProvider(

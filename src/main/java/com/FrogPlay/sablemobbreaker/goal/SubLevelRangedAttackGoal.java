@@ -3,13 +3,17 @@ package com.FrogPlay.sablemobbreaker.goal;
 import com.FrogPlay.sablemobbreaker.util.SubLevelTargetHelper;
 import com.FrogPlay.sablemobbreaker.util.WeaponClassifier;
 import dev.ryanhcode.sable.sublevel.SubLevel;
+import com.FrogPlay.sablemobbreaker.block.ModBlocks;
+import com.FrogPlay.sablemobbreaker.util.SubLevelDamageHelper;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.PathfinderMob;
 import net.minecraft.world.entity.ai.goal.Goal;
-import net.minecraft.world.entity.decoration.ArmorStand;
+import net.minecraft.world.entity.projectile.Arrow;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
 import net.minecraft.world.entity.monster.Pillager;
 import net.minecraft.world.entity.monster.RangedAttackMob;
 import net.minecraft.world.phys.Vec3;
@@ -28,8 +32,6 @@ public class SubLevelRangedAttackGoal extends Goal {
 
     private SubLevel targetSubLevel;
     private BlockPos targetLocalPos;
-
-    private ArmorStand ghostTarget;
 
     public SubLevelRangedAttackGoal(PathfinderMob mob, double searchRadius, double attackRange, int fireCooldownTicks) {
         this.mob = mob;
@@ -54,7 +56,9 @@ public class SubLevelRangedAttackGoal extends Goal {
 
     @Override
     public boolean canContinueToUse() {
-        return this.targetSubLevel != null && this.targetLocalPos != null && !this.targetSubLevel.isRemoved();
+        if (this.targetSubLevel == null || this.targetLocalPos == null || this.targetSubLevel.isRemoved()) return false;
+        Vec3 target = SubLevelTargetHelper.localToWorld(this.targetSubLevel, this.targetLocalPos);
+        return this.mob.position().distanceToSqr(target) <= this.searchRadius * this.searchRadius;
     }
 
     @Override
@@ -69,13 +73,6 @@ public class SubLevelRangedAttackGoal extends Goal {
         this.targetLocalPos = null;
         this.mob.getNavigation().stop();
 
-        if (this.ghostTarget != null) {
-            this.ghostTarget.discard();
-            this.ghostTarget = null;
-        }
-        if (this.mob.getTarget() != null && this.mob.getTarget().isRemoved()) {
-            this.mob.setTarget(null);
-        }
     }
 
     @Override
@@ -120,42 +117,17 @@ public class SubLevelRangedAttackGoal extends Goal {
             return;
         }
 
-        if (this.mob instanceof Pillager) {
-            if (ghostTarget == null || ghostTarget.isRemoved()) {
-                ghostTarget = new ArmorStand(this.mob.level(), targetPos.x, targetPos.y, targetPos.z);
-                ghostTarget.setInvisible(true);
-                ghostTarget.setInvulnerable(true);
-                ghostTarget.setNoGravity(true);
-                ghostTarget.setSilent(true);
-                ghostTarget.setInvulnerable(true);
-                ghostTarget.setRemainingFireTicks(0);
-                ghostTarget.noPhysics = true;
-                this.mob.level().addFreshEntity(ghostTarget); // Реальный спавн для ИИ
-            }
-            ghostTarget.setPos(targetPos.x, targetPos.y, targetPos.z);
-            ghostTarget.setRemainingFireTicks(0);
-            ghostTarget.setInvulnerable(true);
-            ghostTarget.setOldPosAndRot();
-
-            if (this.mob.getTarget() != ghostTarget) {
-                this.mob.setTarget(ghostTarget);
-            }
-            return;
-        }
-
-        if (this.mob instanceof RangedAttackMob rangedMob) {
-            boolean hasValidWeapon = WeaponClassifier.isHoldingRangedWeapon(this.mob) || WeaponClassifier.isNaturalShooter(this.mob);
-            if (hasValidWeapon) {
-                LivingEntity virtualTarget = new ArmorStand(this.mob.level(), targetPos.x, targetPos.y, targetPos.z);
-                virtualTarget.setInvulnerable(true);
-                virtualTarget.setRemainingFireTicks(0);
-                virtualTarget.noPhysics = true;
-                rangedMob.performRangedAttack(virtualTarget, 1.0F);
-                this.mob.swing(InteractionHand.MAIN_HAND);
-            }
+        if (this.mob instanceof RangedAttackMob && (WeaponClassifier.isHoldingRangedWeapon(this.mob)
+                || WeaponClassifier.isNaturalShooter(this.mob) || this.mob instanceof Pillager)) {
+            Arrow arrow = new Arrow(this.mob.level(), this.mob, new ItemStack(Items.ARROW), ItemStack.EMPTY);
+            Vec3 origin = this.mob.getEyePosition().add(this.mob.getLookAngle().scale(0.35D));
+            Vec3 direction = targetPos.subtract(origin).normalize();
+            arrow.setPos(origin.x, origin.y, origin.z);
+            arrow.shoot(direction.x, direction.y, direction.z, 2.0F, 0.0F);
+            this.mob.level().addFreshEntity(arrow);
+            this.mob.swing(InteractionHand.MAIN_HAND);
         }
     }
-
 
     private void fireScgunsProjectile(Vec3 targetPos) {
         try {
@@ -206,7 +178,10 @@ public class SubLevelRangedAttackGoal extends Goal {
     private boolean isTargetBlockGone() {
         if (this.targetSubLevel == null || this.targetLocalPos == null) return true;
         var chunk = this.targetSubLevel.getPlot().getChunk(new net.minecraft.world.level.ChunkPos(this.targetLocalPos));
-        return chunk == null || chunk.getBlockState(this.targetLocalPos).isAir();
+        if (chunk == null) return true;
+        var state = chunk.getBlockState(this.targetLocalPos);
+        return state.isAir() || state.is(ModBlocks.BROKEN_BLOCK.get())
+                || SubLevelDamageHelper.isIgnoredBlock(state);
     }
 
     private void retarget() {
