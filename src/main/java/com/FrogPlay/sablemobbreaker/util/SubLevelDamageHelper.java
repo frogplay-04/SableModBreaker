@@ -178,7 +178,12 @@ public class SubLevelDamageHelper {
                             LevelChunkSection section = sections[sectionIndex];
                             if (section != null) {
                                 section.setBlockState(targetBlock.getX() & 15, targetBlock.getY() & 15, targetBlock.getZ() & 15, brokenState);
-                                BrokenBlockEntity brokenBe = new BrokenBlockEntity(targetBlock, brokenState);
+                                BlockPos brokenEntityPos = new BlockPos(
+                                        targetBlock.getX() & 15,
+                                        targetBlock.getY(),
+                                        targetBlock.getZ() & 15
+                                );
+                                BrokenBlockEntity brokenBe = new BrokenBlockEntity(brokenEntityPos, brokenState);
                                 brokenBe.setOriginalState(oldState);
                                 brokenBe.setOriginalNbt(savedNbt);
                                 chunk.setBlockEntity(brokenBe);
