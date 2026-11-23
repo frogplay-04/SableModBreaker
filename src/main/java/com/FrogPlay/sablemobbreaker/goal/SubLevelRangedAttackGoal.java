@@ -14,6 +14,7 @@ import net.minecraft.world.entity.ai.goal.Goal;
 import net.minecraft.world.entity.projectile.Arrow;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
+import net.minecraft.world.item.ProjectileWeaponItem;
 import net.minecraft.world.entity.monster.Pillager;
 import net.minecraft.world.entity.monster.RangedAttackMob;
 import net.minecraft.world.phys.Vec3;
@@ -119,7 +120,21 @@ public class SubLevelRangedAttackGoal extends Goal {
 
         if (this.mob instanceof RangedAttackMob && (WeaponClassifier.isHoldingRangedWeapon(this.mob)
                 || WeaponClassifier.isNaturalShooter(this.mob) || this.mob instanceof Pillager)) {
-            Arrow arrow = new Arrow(this.mob.level(), this.mob, new ItemStack(Items.ARROW), ItemStack.EMPTY);
+            ItemStack firingWeapon = this.mob.getMainHandItem();
+            if (firingWeapon.isEmpty()) {
+                firingWeapon = this.mob.getOffhandItem();
+            }
+
+            if (firingWeapon.isEmpty() || !(firingWeapon.getItem() instanceof ProjectileWeaponItem)) {
+                firingWeapon = new ItemStack(Items.BOW);
+            }
+
+            Arrow arrow = new Arrow(
+                    this.mob.level(),
+                    this.mob,
+                    new ItemStack(Items.ARROW),
+                    firingWeapon.copy()
+            );
             Vec3 origin = this.mob.getEyePosition().add(this.mob.getLookAngle().scale(0.35D));
             Vec3 direction = targetPos.subtract(origin).normalize();
             arrow.setPos(origin.x, origin.y, origin.z);
