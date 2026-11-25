@@ -41,7 +41,7 @@ jobs:
         timeout-minutes: 8
         run: |
           Write-Host "Running NeoForge GameTests for sablemobbreaker..."
-          .\\gradlew.bat runGameTestServer --no-daemon --stacktrace
+          .\gradlew.bat runGameTestServer --no-daemon --stacktrace
           if ($LASTEXITCODE -ne 0) {
             Write-Error "NeoForge GameTests failed. See run/logs/latest.log in the uploaded artifact."
             exit $LASTEXITCODE
