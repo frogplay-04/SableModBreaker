@@ -1,0 +1,83 @@
+name: Windows Minecraft Test
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: windows-minecraft-test
+  cancel-in-progress: false
+
+jobs:
+  build-and-launch:
+    # This job runs only when manually started, on the owner's registered Windows runner.
+    runs-on: [self-hosted, Windows, X64]
+    timeout-minutes: 12
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+
+      - name: Setup JDK 21
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Build mod
+        shell: pwsh
+        run: .\gradlew.bat build --no-daemon
+
+      - name: Launch Minecraft client and check startup
+        shell: pwsh
+        timeout-minutes: 6
+        run: |
+          $clientProcess = Start-Process -FilePath $env:ComSpec -ArgumentList @('/c', 'gradlew.bat runClient --no-daemon') -WorkingDirectory $env:GITHUB_WORKSPACE -PassThru
+          $finished = $clientProcess.WaitForExit(240000)
+
+          if (-not $finished) {
+            Write-Host "Client is still running after 4 minutes; stopping it so the runner is freed."
+            & taskkill.exe /PID $clientProcess.Id /T /F | Out-Null
+            Start-Sleep -Seconds 3
+          }
+
+          $latestLog = Get-ChildItem -Path $env:GITHUB_WORKSPACE -Filter latest.log -Recurse -File -ErrorAction SilentlyContinue |
+            Where-Object { $_.FullName -match '[\\/]run[\\/]logs[\\/]latest\.log$' } |
+            Sort-Object LastWriteTime -Descending |
+            Select-Object -First 1
+
+          if (-not $latestLog) {
+            Write-Error "Minecraft latest.log was not created. Check the uploaded Gradle output and crash reports."
+            exit 1
+          }
+
+          $logText = Get-Content -Path $latestLog.FullName -Raw
+          if ($logText -notmatch 'Done \(') {
+            Write-Host "Minecraft did not reach the normal 'Done' startup marker."
+            Get-Content -Path $latestLog.FullName -Tail 100
+            exit 1
+          }
+
+          Write-Host "SUCCESS: Minecraft reached the 'Done' startup marker."
+          Write-Host "Log: $($latestLog.FullName)"
+
+      - name: Upload build, logs and crash reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: sablemobbreaker-windows-test-${{ github.run_number }}
+          if-no-files-found: warn
+          retention-days: 14
+          path: |
+            build/libs/*.jar
+            run/logs/**
+            run/crash-reports/**
+            hs_err_pid*.log
