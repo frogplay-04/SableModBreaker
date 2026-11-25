@@ -73,6 +73,11 @@ neoForge {
             programArguments.addAll '--nogui'
             systemProperties.put 'neoforge.enabledGameTestNamespaces', project.mod_id
         }
+        // Dedicated NeoForge GameTest server; this creates the runGameTestServer task.
+        gameTestServer {
+            type = "gameTestServer"
+            systemProperties.put 'neoforge.enabledGameTestNamespaces', project.mod_id
+        }
         data {
             data()
             programArguments.addAll '--mod', project.mod_id, '--all',
