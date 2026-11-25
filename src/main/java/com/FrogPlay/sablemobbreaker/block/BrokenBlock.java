@@ -8,6 +8,7 @@ import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.EntityBlock;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.RenderShape;
+import net.minecraft.world.level.material.PushReaction;
 import net.minecraft.world.level.block.state.BlockBehaviour;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.shapes.CollisionContext;
@@ -20,6 +21,7 @@ public class BrokenBlock extends Block implements EntityBlock {
                 .noCollission()
                 .noOcclusion()
                 .strength(-1.0F, 3600000.0F)
+                .pushReaction(PushReaction.BLOCK)
                 .noLootTable()
                 .replaceable()
                 .isViewBlocking((state, level, pos) -> false)

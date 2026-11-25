@@ -575,13 +575,13 @@ public class WeldingTorchHandler {
             if (!fluid.isEmpty()) {
                 String id = BuiltInRegistries.FLUID.getKey(fluid.getFluid()).toString();
                 if (id.contains("propane") || id.contains("butane")) {
-                    return fluid.getAmount();
+                    return Math.min(FuelTankItem.CAPACITY, fluid.getAmount());
                 }
             }
         }
         if (isCustomFuelBottle(bottle)) {
             CustomData data = bottle.getOrDefault(DataComponents.CUSTOM_DATA, CustomData.EMPTY);
-            return Math.min(2000, data.copyTag().getInt("GasStored"));
+            return Math.min(FuelTankItem.CAPACITY, Math.max(0, data.copyTag().getInt("GasStored")));
         }
         return 0;
     }

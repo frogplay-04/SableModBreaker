@@ -1,213 +1,256 @@
 package com.FrogPlay.sablemobbreaker.goal;
 
+import com.FrogPlay.sablemobbreaker.block.ModBlocks;
+import com.FrogPlay.sablemobbreaker.util.SubLevelDamageHelper;
 import com.FrogPlay.sablemobbreaker.util.SubLevelTargetHelper;
 import com.FrogPlay.sablemobbreaker.util.WeaponClassifier;
 import dev.ryanhcode.sable.sublevel.SubLevel;
-import com.FrogPlay.sablemobbreaker.block.ModBlocks;
-import com.FrogPlay.sablemobbreaker.util.SubLevelDamageHelper;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.InteractionHand;
-import net.minecraft.world.entity.LivingEntity;
-import net.minecraft.world.entity.PathfinderMob;
+import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.EntityType;
+import net.minecraft.world.entity.Mob;
 import net.minecraft.world.entity.ai.goal.Goal;
-import net.minecraft.world.entity.projectile.Arrow;
+import net.minecraft.world.entity.decoration.ArmorStand;
+import net.minecraft.world.item.BowItem;
+import net.minecraft.world.item.CrossbowItem;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
-import net.minecraft.world.item.ProjectileWeaponItem;
-import net.minecraft.world.entity.monster.Pillager;
-import net.minecraft.world.entity.monster.RangedAttackMob;
+import net.minecraft.world.item.TridentItem;
+import net.minecraft.core.component.DataComponents;
+import net.minecraft.world.item.component.ChargedProjectiles;
 import net.minecraft.world.phys.Vec3;
 
 import java.util.EnumSet;
+import java.util.List;
 import java.util.Optional;
 
 public class SubLevelRangedAttackGoal extends Goal {
-
-    private final PathfinderMob mob;
+    private final Mob mob;
     private final double searchRadius;
     private final double attackRange;
     private final int fireCooldownTicks;
-    private int cooldown = 0;
-    private int retargetTimer = 0;
+    private final boolean nativeRangedAi;
 
+    private int cooldown;
+    private int retargetTimer;
+    private int drawTicks;
+    private boolean drawing;
+    private InteractionHand firingHand = InteractionHand.MAIN_HAND;
+    private InteractionHand temporaryAmmoHand;
     private SubLevel targetSubLevel;
     private BlockPos targetLocalPos;
+    private ArmorStand virtualTarget;
 
-    public SubLevelRangedAttackGoal(PathfinderMob mob, double searchRadius, double attackRange, int fireCooldownTicks) {
+    public SubLevelRangedAttackGoal(Mob mob, double searchRadius, double attackRange, int fireCooldownTicks) {
         this.mob = mob;
         this.searchRadius = searchRadius;
         this.attackRange = attackRange;
         this.fireCooldownTicks = fireCooldownTicks;
-        this.setFlags(EnumSet.of(Flag.MOVE, Flag.LOOK));
+        this.nativeRangedAi = WeaponClassifier.hasNativeRangedAi(mob);
+        // Native ranged goals (Blaze/Ghast/Skeleton/etc.) must be allowed to run their
+        // own movement, aiming, draw, firing and animation logic.
+        this.setFlags(nativeRangedAi ? EnumSet.noneOf(Flag.class) : EnumSet.of(Flag.MOVE, Flag.LOOK));
     }
 
     @Override
     public boolean canUse() {
-        if (!WeaponClassifier.isRanged(this.mob)) return false;
-        if (!(this.mob.level() instanceof ServerLevel level)) return false;
-
-        Optional<SubLevelTargetHelper.Found> found = SubLevelTargetHelper.findNearestBlock(level, this.mob.position(), this.searchRadius);
+        if (!WeaponClassifier.isRanged(mob)) return false;
+        if (mob.getTarget() != null && mob.getTarget().isAlive()) return false;
+        if (!(mob.level() instanceof ServerLevel level)) return false;
+        Optional<SubLevelTargetHelper.Found> found =
+                SubLevelTargetHelper.findNearestBlock(level, mob.position(), searchRadius);
         if (found.isEmpty()) return false;
-
-        this.targetSubLevel = found.get().subLevel();
-        this.targetLocalPos = found.get().localPos();
+        targetSubLevel = found.get().subLevel();
+        targetLocalPos = found.get().localPos();
         return true;
     }
 
     @Override
     public boolean canContinueToUse() {
-        if (this.targetSubLevel == null || this.targetLocalPos == null || this.targetSubLevel.isRemoved()) return false;
-        Vec3 target = SubLevelTargetHelper.localToWorld(this.targetSubLevel, this.targetLocalPos);
-        return this.mob.position().distanceToSqr(target) <= this.searchRadius * this.searchRadius;
+        if (targetSubLevel == null || targetLocalPos == null || targetSubLevel.isRemoved()) return false;
+        if (mob.getTarget() != null && mob.getTarget().isAlive()
+                && mob.getTarget() != virtualTarget) return false;
+        Vec3 target = SubLevelTargetHelper.localToWorld(targetSubLevel, targetLocalPos);
+        return mob.position().distanceToSqr(target) <= searchRadius * searchRadius;
     }
 
     @Override
     public void start() {
-        this.cooldown = 0;
-        this.retargetTimer = 0;
+        cooldown = 0;
+        retargetTimer = 0;
+        drawTicks = 0;
+        drawing = false;
+        if (nativeRangedAi || mob instanceof net.minecraft.world.entity.monster.RangedAttackMob) {
+
+            virtualTarget = EntityType.ARMOR_STAND.create(mob.level());
+            if (virtualTarget != null) {
+                virtualTarget.setInvisible(true);
+                virtualTarget.setNoGravity(true);
+                virtualTarget.setNoBasePlate(true);
+                if (nativeRangedAi) mob.setTarget(virtualTarget);
+                moveVirtualTarget();
+            }
+        }
     }
 
     @Override
     public void stop() {
-        this.targetSubLevel = null;
-        this.targetLocalPos = null;
-        this.mob.getNavigation().stop();
-
+        if (mob.getTarget() == virtualTarget) mob.setTarget(null);
+        if (virtualTarget != null) {
+            virtualTarget.discard();
+            virtualTarget = null;
+        }
+        if (drawing && mob.isUsingItem()) mob.releaseUsingItem();
+        clearTemporaryAmmo();
+        drawing = false;
+        targetSubLevel = null;
+        targetLocalPos = null;
+        mob.getNavigation().stop();
     }
 
     @Override
     public void tick() {
-        if (this.targetSubLevel == null || this.targetLocalPos == null) return;
-
-        Vec3 worldPos = SubLevelTargetHelper.localToWorld(this.targetSubLevel, this.targetLocalPos);
-        double distSqr = this.mob.position().distanceToSqr(worldPos);
-
-        this.mob.getLookControl().setLookAt(worldPos.x, worldPos.y, worldPos.z);
-
-        if (distSqr > this.attackRange * this.attackRange) {
-            this.mob.getNavigation().moveTo(worldPos.x, worldPos.y, worldPos.z, 1.0);
-            return;
-        }
-
-        this.mob.getNavigation().stop();
-
-        if (!SubLevelTargetHelper.hasLineOfSight(this.mob, worldPos)) return;
-
-        if (this.cooldown > 0) {
-            this.cooldown--;
-            return;
-        }
-
-        if (--this.retargetTimer <= 0) {
-            this.retargetTimer = 20;
+        if (targetSubLevel == null || targetLocalPos == null) return;
+        if (--retargetTimer <= 0) {
+            retargetTimer = 20;
             if (isTargetBlockGone()) {
                 retarget();
-                return;
+                if (targetSubLevel == null) return;
             }
         }
 
-        this.cooldown = this.fireCooldownTicks;
-        fireAttack(worldPos);
-    }
-
-    private void fireAttack(Vec3 targetPos) {
-        if (WeaponClassifier.isHoldingScorchedGunsWeapon(this.mob)) {
-            fireScgunsProjectile(targetPos);
-            this.mob.swing(InteractionHand.MAIN_HAND);
+        Vec3 targetPos = SubLevelTargetHelper.localToWorld(targetSubLevel, targetLocalPos);
+        if (nativeRangedAi) {
+            if (virtualTarget == null) return;
+            if (mob.getTarget() != null && mob.getTarget() != virtualTarget && mob.getTarget().isAlive()) return;
+            mob.setTarget(virtualTarget);
+            virtualTarget.setPos(targetPos.x, targetPos.y, targetPos.z);
+            virtualTarget.setYRot(mob.getYRot());
             return;
         }
 
-        if (this.mob instanceof RangedAttackMob && (WeaponClassifier.isHoldingRangedWeapon(this.mob)
-                || WeaponClassifier.isNaturalShooter(this.mob) || this.mob instanceof Pillager)) {
-            ItemStack firingWeapon = this.mob.getMainHandItem();
-            if (firingWeapon.isEmpty()) {
-                firingWeapon = this.mob.getOffhandItem();
-            }
+        double distSqr = mob.position().distanceToSqr(targetPos);
+        mob.getLookControl().setLookAt(targetPos.x, targetPos.y, targetPos.z);
+        if (distSqr > attackRange * attackRange) {
+            mob.getNavigation().moveTo(targetPos.x, targetPos.y, targetPos.z, 1.0D);
+            return;
+        }
+        mob.getNavigation().stop();
+        if (!SubLevelTargetHelper.hasLineOfSight(mob, targetPos)) return;
 
-            if (firingWeapon.isEmpty() || !(firingWeapon.getItem() instanceof ProjectileWeaponItem)) {
-                firingWeapon = new ItemStack(Items.BOW);
+        if (mob instanceof net.minecraft.world.entity.monster.RangedAttackMob rangedMob) {
+            if (virtualTarget == null) return;
+            virtualTarget.setPos(targetPos.x, targetPos.y, targetPos.z);
+            if (cooldown > 0) {
+                cooldown--;
+                return;
             }
+            rangedMob.performRangedAttack(virtualTarget, 1.0F);
+            mob.swing(InteractionHand.MAIN_HAND);
+            cooldown = fireCooldownTicks;
+            return;
+        }
 
-            Arrow arrow = new Arrow(
-                    this.mob.level(),
-                    this.mob,
-                    new ItemStack(Items.ARROW),
-                    firingWeapon.copy()
-            );
-            Vec3 origin = this.mob.getEyePosition().add(this.mob.getLookAngle().scale(0.35D));
-            Vec3 direction = targetPos.subtract(origin).normalize();
-            arrow.setPos(origin.x, origin.y, origin.z);
-            arrow.shoot(direction.x, direction.y, direction.z, 2.0F, 0.0F);
-            this.mob.level().addFreshEntity(arrow);
-            this.mob.swing(InteractionHand.MAIN_HAND);
+        if (drawing) {
+            drawTicks++;
+            int required = mob.getUseItem().getItem() instanceof TridentItem ? 10 : 20;
+            if (drawTicks >= required) {
+                if (mob.isUsingItem()) mob.releaseUsingItem();
+                clearTemporaryAmmo();
+                drawing = false;
+                cooldown = fireCooldownTicks;
+            }
+            return;
+        }
+
+        if (cooldown > 0) {
+            cooldown--;
+            return;
+        }
+        fireHeldVanillaWeapon(targetPos);
+    }
+
+    private void fireHeldVanillaWeapon(Vec3 targetPos) {
+        ItemStack main = mob.getMainHandItem();
+        firingHand = !main.isEmpty() && WeaponClassifier.isRangedWeapon(main)
+                ? InteractionHand.MAIN_HAND : InteractionHand.OFF_HAND;
+        ItemStack weapon = mob.getItemInHand(firingHand);
+
+        if (weapon.getItem() instanceof CrossbowItem) {
+            if (!CrossbowItem.isCharged(weapon)) {
+                weapon.set(DataComponents.CHARGED_PROJECTILES,
+                        ChargedProjectiles.of(new ItemStack(Items.ARROW)));
+            }
+            Vec3 direction = targetPos.subtract(mob.getEyePosition()).normalize();
+            float yaw = (float) (Math.toDegrees(Math.atan2(direction.z, direction.x)) - 90.0D);
+            float pitch = (float) -Math.toDegrees(Math.asin(direction.y));
+            mob.setYRot(yaw);
+            mob.setXRot(pitch);
+            ((CrossbowItem) weapon.getItem()).performShooting(
+                    mob.level(), mob, firingHand, weapon, 3.15F, 1.0F, null);
+            mob.swing(firingHand);
+            cooldown = fireCooldownTicks;
+            return;
+        }
+
+        if (weapon.getItem() instanceof BowItem) {
+            InteractionHand ammoHand = firingHand == InteractionHand.MAIN_HAND
+                    ? InteractionHand.OFF_HAND : InteractionHand.MAIN_HAND;
+            if (mob.getItemInHand(ammoHand).isEmpty()) {
+                mob.setItemInHand(ammoHand, new ItemStack(Items.ARROW));
+                temporaryAmmoHand = ammoHand;
+            }
+            if (!mob.getItemInHand(ammoHand).isEmpty()) {
+                mob.startUsingItem(firingHand);
+                drawing = true;
+                drawTicks = 0;
+            }
+            return;
+        }
+
+        if (weapon.getItem() instanceof TridentItem) {
+            mob.startUsingItem(firingHand);
+            drawing = true;
+            drawTicks = 0;
+            return;
+        }
+
+        cooldown = fireCooldownTicks;
+    }
+
+    private void clearTemporaryAmmo() {
+        if (temporaryAmmoHand != null) {
+            mob.setItemInHand(temporaryAmmoHand, ItemStack.EMPTY);
+            temporaryAmmoHand = null;
         }
     }
 
-    private void fireScgunsProjectile(Vec3 targetPos) {
-        try {
-            net.minecraft.world.item.ItemStack weapon = this.mob.getMainHandItem();
-            if (weapon.isEmpty()) weapon = this.mob.getOffhandItem();
-            ClassLoader loader = this.mob.getClass().getClassLoader();
-            Class<?> gunItemClass = Class.forName("top.ribs.scguns.item.GunItem", false, loader);
-            if (!gunItemClass.isInstance(weapon.getItem())) return;
-
-            Class<?> gunClass = Class.forName("top.ribs.scguns.common.Gun", false, loader);
-            java.lang.reflect.Method canShoot = gunClass.getMethod("canShoot", net.minecraft.world.item.ItemStack.class);
-            if (!Boolean.TRUE.equals(canShoot.invoke(null, weapon))) return;
-            Object gun = gunItemClass.getMethod("getModifiedGun", net.minecraft.world.item.ItemStack.class)
-                    .invoke(weapon.getItem(), weapon);
-            if (gun == null) return;
-
-            Class<?> entitiesClass = Class.forName("top.ribs.scguns.init.ModEntities", false, loader);
-            Object holder = entitiesClass.getField("PROJECTILE").get(null);
-            Object entityType = holder.getClass().getMethod("get").invoke(holder);
-            Class<?> projectileClass = Class.forName("top.ribs.scguns.entity.projectile.ProjectileEntity", false, loader);
-            java.lang.reflect.Constructor<?> constructor = projectileClass.getConstructor(
-                    net.minecraft.world.entity.EntityType.class,
-                    net.minecraft.world.level.Level.class,
-                    net.minecraft.world.entity.LivingEntity.class,
-                    net.minecraft.world.item.ItemStack.class,
-                    gunItemClass,
-                    gunClass);
-            Object projectile = constructor.newInstance(entityType, this.mob.level(), this.mob, weapon, weapon.getItem(), gun);
-            if (!(projectile instanceof net.minecraft.world.entity.Entity entity)) return;
-
-            Vec3 origin = this.mob.getEyePosition().add(this.mob.getLookAngle().scale(0.35D));
-            Vec3 direction = targetPos.subtract(origin).normalize();
-            Object projectileData = gunClass.getMethod("getProjectile").invoke(gun);
-            double speed = 3.0D;
-            if (projectileData != null) {
-                Object rawSpeed = projectileData.getClass().getMethod("getSpeed").invoke(projectileData);
-                if (rawSpeed instanceof Number number) speed = Math.max(1.0D, Math.min(8.0D, number.doubleValue()));
-            }
-            entity.setPos(origin.x, origin.y, origin.z);
-            entity.setDeltaMovement(direction.scale(speed));
-            entity.setYRot((float) (Math.toDegrees(Math.atan2(direction.z, direction.x)) - 90.0D));
-            entity.setXRot((float) -Math.toDegrees(Math.asin(direction.y)));
-            this.mob.level().addFreshEntity(entity);
-        } catch (Throwable ignored) {
-        }
+    private void moveVirtualTarget() {
+        if (virtualTarget == null || targetSubLevel == null || targetLocalPos == null) return;
+        Vec3 pos = SubLevelTargetHelper.localToWorld(targetSubLevel, targetLocalPos);
+        virtualTarget.setPos(pos.x, pos.y, pos.z);
     }
 
     private boolean isTargetBlockGone() {
-        if (this.targetSubLevel == null || this.targetLocalPos == null) return true;
-        var chunk = this.targetSubLevel.getPlot().getChunk(new net.minecraft.world.level.ChunkPos(this.targetLocalPos));
+        if (targetSubLevel == null || targetLocalPos == null) return true;
+        var chunk = targetSubLevel.getPlot().getChunk(new net.minecraft.world.level.ChunkPos(targetLocalPos));
         if (chunk == null) return true;
-        var state = chunk.getBlockState(this.targetLocalPos);
+        var state = chunk.getBlockState(targetLocalPos);
         return state.isAir() || state.is(ModBlocks.BROKEN_BLOCK.get())
                 || SubLevelDamageHelper.isIgnoredBlock(state);
     }
 
     private void retarget() {
-        this.targetSubLevel = null;
-        this.targetLocalPos = null;
-        if (!(this.mob.level() instanceof ServerLevel level)) return;
-
-        var found = SubLevelTargetHelper.findNearestBlock(level, this.mob.position(), this.searchRadius);
+        targetSubLevel = null;
+        targetLocalPos = null;
+        if (!(mob.level() instanceof ServerLevel level)) return;
+        var found = SubLevelTargetHelper.findNearestBlock(level, mob.position(), searchRadius);
         if (found.isPresent()) {
-            this.targetSubLevel = found.get().subLevel();
-            this.targetLocalPos = found.get().localPos();
+            targetSubLevel = found.get().subLevel();
+            targetLocalPos = found.get().localPos();
+            moveVirtualTarget();
         }
     }
 }

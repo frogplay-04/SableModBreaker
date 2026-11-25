@@ -13,6 +13,7 @@ import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.event.level.ExplosionEvent;
 
+import java.util.ArrayList;
 import java.util.List;
 
 @EventBusSubscriber(modid = SableMobBreaker.MOD_ID)
@@ -30,31 +31,24 @@ public class ExplosionHandler {
         if (affectedBlocks.isEmpty()) return;
 
         for (SubLevel subLevel : container.getAllSubLevels()) {
-            if (subLevel.isRemoved()) continue;
-            if (SubLevelDamageHelper.isRagdoll(subLevel)) continue;
-
+            if (subLevel.isRemoved() || SubLevelDamageHelper.isRagdoll(subLevel)) continue;
             BoundingBox3dc box = subLevel.boundingBox();
-
-            List<BlockPos> toRemove = new java.util.ArrayList<>();
+            List<BlockPos> handled = new ArrayList<>();
 
             for (BlockPos pos : affectedBlocks) {
-                Vec3 center = Vec3.atCenterOf(pos);
-                if (!isInside(box, center)) continue;
+                Vec3 worldCenter = Vec3.atCenterOf(pos);
+                if (!isInside(box, worldCenter)) continue;
 
-                Vec3 localPos = subLevel.logicalPose().transformPositionInverse(center);
-                BlockPos plotPos = BlockPos.containing(localPos.x, localPos.y, localPos.z);
+                Vec3 local = subLevel.logicalPose().transformPositionInverse(worldCenter);
+                BlockPos localPos = BlockPos.containing(local.x, local.y, local.z);
+                if (!isBlockInSubLevel(level, localPos)) continue;
 
-                if (!isBlockInSubLevel(level, subLevel, plotPos)) continue;
-
-                float explosionPower = event.getExplosion().radius();
-                int damage = Math.round(explosionPower * 10.0F);
-                SubLevelDamageHelper.damageBlock(
-                        level, subLevel, center, damage);
-
-                toRemove.add(pos);
+                int damage = Math.max(1, Math.round(event.getExplosion().radius() * 10.0F));
+                if (SubLevelDamageHelper.damageBlockExact(level, subLevel, worldCenter, damage)) {
+                    handled.add(pos);
+                }
             }
-
-            affectedBlocks.removeAll(toRemove);
+            affectedBlocks.removeAll(handled);
         }
     }
 
@@ -64,18 +58,18 @@ public class ExplosionHandler {
                 && pos.z >= box.minZ() && pos.z <= box.maxZ();
     }
 
-    private static boolean isBlockInSubLevel(Level level, SubLevel subLevel, BlockPos plotPos) {
+    private static boolean isBlockInSubLevel(Level level, BlockPos localPos) {
         try {
-            var container = SubLevelContainer.getContainer(level);
+            SubLevelContainer container = SubLevelContainer.getContainer(level);
             if (container == null) return false;
-            var cp = new net.minecraft.world.level.ChunkPos(
-                    plotPos.getX() >> 4, plotPos.getZ() >> 4);
+            net.minecraft.world.level.ChunkPos cp = new net.minecraft.world.level.ChunkPos(
+                    localPos.getX() >> 4, localPos.getZ() >> 4);
             if (!container.inBounds(cp)) return false;
             var chunk = container.getChunk(cp);
             if (chunk == null) return false;
-            BlockState state = chunk.getBlockState(plotPos);
+            BlockState state = chunk.getBlockState(localPos);
             return !state.isAir();
-        } catch (Throwable t) {
+        } catch (Throwable ignored) {
             return false;
         }
     }

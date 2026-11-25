@@ -217,7 +217,7 @@ public class ClientEvents {
         Vec3[][] edges = WeldGeometry.visibleFaceEdges(box, mc.player.getEyePosition());
         Vec3 eye = mc.player.getEyePosition();
         Vec3 rayEnd = eye.add(mc.player.getLookAngle().scale(6.0D));
-        boolean tracing = mc.options.keyAttack.isDown();
+        boolean tracing = mc.options.keyUse.isDown();
         final int samples = 12;
         com.mojang.blaze3d.systems.RenderSystem.lineWidth(3.0F);
         for (int edge = 0; edge < edges.length; edge++) {

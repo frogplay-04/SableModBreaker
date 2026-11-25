@@ -12,10 +12,10 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.Level;
+import net.minecraft.world.level.block.EntityBlock;
+import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.chunk.LevelChunk;
-import net.minecraft.world.level.block.entity.BlockEntity;
-import net.minecraft.world.level.block.EntityBlock;
 import net.minecraft.world.level.chunk.LevelChunkSection;
 import net.minecraft.world.phys.Vec3;
 import net.neoforged.bus.api.SubscribeEvent;
@@ -26,79 +26,70 @@ import java.util.UUID;
 
 @EventBusSubscriber(modid = SableMobBreaker.MOD_ID)
 public class BlockPlaceHandler {
+    private BlockPlaceHandler() {}
 
     @SubscribeEvent
     public static void onBlockPlace(BlockEvent.EntityPlaceEvent event) {
-        if (event.getLevel().isClientSide()) return;
-        if (!(event.getLevel() instanceof Level level)) return;
+        if (event.getLevel().isClientSide() || !(event.getLevel() instanceof Level level)) return;
 
-        BlockState oldState = event.getBlockSnapshot().getState();
         BlockState newState = event.getPlacedBlock();
-
-        if (!oldState.is(ModBlocks.BROKEN_BLOCK.get())) return;
+        if (newState.isAir() || newState.is(ModBlocks.BROKEN_BLOCK.get())) return;
 
         BlockPos worldPos = event.getPos();
         SubLevelContainer container = SubLevelContainer.getContainer(level);
-
         if (container == null) return;
 
-        for (SubLevel sl : container.getAllSubLevels()) {
-            if (sl.isRemoved()) continue;
-            UUID id = sl.getUniqueId();
+        for (SubLevel subLevel : container.getAllSubLevels()) {
+            if (subLevel.isRemoved()) continue;
 
-            Vec3 local = sl.logicalPose().transformPositionInverse(Vec3.atCenterOf(worldPos));
+            Vec3 local = subLevel.logicalPose().transformPositionInverse(Vec3.atCenterOf(worldPos));
             BlockPos localPos = BlockPos.containing(local.x, local.y, local.z);
+            if (local.distanceToSqr(Vec3.atCenterOf(localPos)) >= 2.0D) continue;
 
-            if (local.distanceToSqr(Vec3.atCenterOf(localPos)) < 2.0) {
-                ChunkPos cp = new ChunkPos(localPos.getX() >> 4, localPos.getZ() >> 4);
-                PlotChunkHolder holder = container.getChunkHolder(cp);
-                LevelChunk chunk = container.getChunk(cp);
+            ChunkPos cp = new ChunkPos(localPos.getX() >> 4, localPos.getZ() >> 4);
+            PlotChunkHolder holder = container.getChunkHolder(cp);
+            LevelChunk chunk = container.getChunk(cp);
+            if (holder == null || chunk == null) continue;
 
-                event.setCanceled(true);
+            BlockState oldState = chunk.getBlockState(localPos);
+            if (!oldState.is(ModBlocks.BROKEN_BLOCK.get())) continue;
 
-                if (holder != null && chunk != null) {
-                    try {
-                        holder.handleBlockChange(
-                                localPos.getX(), localPos.getY(), localPos.getZ(),
-                                oldState, newState
-                        );
-                        chunk.removeBlockEntity(localPos);
+            event.setCanceled(true);
+            try {
+                holder.handleBlockChange(localPos.getX(), localPos.getY(), localPos.getZ(), oldState, newState);
+                chunk.removeBlockEntity(localPos);
 
-                        int sectionIndex = chunk.getSectionIndex(localPos.getY());
-                        LevelChunkSection section = chunk.getSection(sectionIndex);
-                        section.setBlockState(
-                                localPos.getX() & 15,
-                                localPos.getY() & 15,
-                                localPos.getZ() & 15,
-                                newState
-                        );
+                int sectionIndex = chunk.getSectionIndex(localPos.getY());
+                LevelChunkSection[] sections = chunk.getSections();
+                if (sectionIndex < 0 || sectionIndex >= sections.length || sections[sectionIndex] == null) {
+                    SableMobBreaker.LOGGER.warn("[SMB] Cannot replace broken block at {}: missing chunk section", localPos);
+                    return;
+                }
+                sections[sectionIndex].setBlockState(
+                        localPos.getX() & 15, localPos.getY() & 15, localPos.getZ() & 15, newState);
 
-                        if (newState.hasBlockEntity()
-                                && newState.getBlock() instanceof EntityBlock entityBlock) {
-                            BlockEntity replacementEntity = entityBlock.newBlockEntity(localPos, newState);
-                            if (replacementEntity != null) {
-                                chunk.setBlockEntity(replacementEntity);
-                            }
+                if (newState.hasBlockEntity() && newState.getBlock() instanceof EntityBlock entityBlock) {
+                    BlockEntity replacementEntity = entityBlock.newBlockEntity(localPos, newState);
+                    if (replacementEntity != null) chunk.setBlockEntity(replacementEntity);
+                }
+
+                chunk.setUnsaved(true);
+                UUID subLevelId = subLevel.getUniqueId();
+                BlockHealthManager.removeDestroyedBlock(subLevelId, localPos.getX(), localPos.getY(), localPos.getZ());
+                BlockHealthManager.reset(subLevelId, localPos.getX(), localPos.getY(), localPos.getZ());
+
+                if (level instanceof ServerLevel serverLevel) {
+                    ClientboundBlockUpdatePacket packet = new ClientboundBlockUpdatePacket(worldPos, newState);
+                    for (ServerPlayer player : serverLevel.players()) {
+                        if (player.distanceToSqr(Vec3.atCenterOf(worldPos)) < 4096.0D) {
+                            player.connection.send(packet);
                         }
-                        chunk.setUnsaved(true);
-
-                        BlockHealthManager.removeDestroyedBlock(id, localPos.getX(), localPos.getY(), localPos.getZ());
-                        BlockHealthManager.reset(id, localPos.getX(), localPos.getY(), localPos.getZ());
-
-                        if (level instanceof ServerLevel serverLevel) {
-                            ClientboundBlockUpdatePacket packet = new ClientboundBlockUpdatePacket(worldPos, newState);
-                            for (ServerPlayer player : serverLevel.players()) {
-                                if (player.distanceToSqr(Vec3.atCenterOf(worldPos)) < 4096) {
-                                    player.connection.send(packet);
-                                }
-                            }
-                        }
-                    } catch (Throwable t) {
-                        SableMobBreaker.LOGGER.error("[SMB] Error when installing a unit to replace a broken one: {}", t.toString());
                     }
                 }
-                return;
+            } catch (Throwable t) {
+                SableMobBreaker.LOGGER.error("[SMB] Failed to replace a broken Sable block at {}", localPos, t);
             }
+            return;
         }
     }
 }

@@ -70,7 +70,7 @@ public class WeldingTorchItem extends Item {
     @Override
     public int getBarWidth(ItemStack stack) {
         int fuel = WeldingTorchHandler.getFuelAmount(getBottle(stack));
-        return Math.round(13.0F * fuel / 2000.0F);
+        return Math.max(0, Math.min(13, Math.round(13.0F * fuel / FuelTankItem.CAPACITY)));
     }
 
     @Override
@@ -101,10 +101,10 @@ public class WeldingTorchItem extends Item {
                 tooltip.add(Component.translatable("tooltip.sablemobbreaker.welding_torch.danger.oxygen").withStyle(ChatFormatting.RED));
             } else {
                 int fuel = WeldingTorchHandler.getFuelAmount(bottle);
-                tooltip.add(Component.translatable("tooltip.sablemobbreaker.welding_torch.fuel", fuel, 2000)
+                tooltip.add(Component.translatable("tooltip.sablemobbreaker.welding_torch.fuel", fuel, FuelTankItem.CAPACITY)
                         .withStyle(fuel > 0 ? ChatFormatting.AQUA : ChatFormatting.DARK_GRAY));
                 if (fuel > 0) {
-                    tooltip.add(Component.literal(String.format("(%.0f%%)", (fuel * 100.0f) / 2000))
+                    tooltip.add(Component.literal(String.format("(%.0f%%)", (fuel * 100.0f) / FuelTankItem.CAPACITY))
                             .withStyle(ChatFormatting.GRAY));
                 }
             }

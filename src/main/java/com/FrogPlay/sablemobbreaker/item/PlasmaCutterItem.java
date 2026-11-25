@@ -100,6 +100,32 @@ public class PlasmaCutterItem extends Item {
         return InteractionResultHolder.sidedSuccess(stack, level.isClientSide);
     }
 
+
+    @Override
+    public boolean isBarVisible(ItemStack stack) {
+        ItemStack bottle = getBottle(stack);
+        if (bottle.isEmpty()) return false;
+        if (bottle.getItem() instanceof OxygenTankItem) {
+            return OxygenTankItem.getAir(bottle) > 0;
+        }
+        return WeldingTorchHandler.getFuelAmount(bottle) > 0;
+    }
+
+    @Override
+    public int getBarWidth(ItemStack stack) {
+        ItemStack bottle = getBottle(stack);
+        int amount = bottle.getItem() instanceof OxygenTankItem
+                ? OxygenTankItem.getAir(bottle)
+                : WeldingTorchHandler.getFuelAmount(bottle);
+        return Math.max(0, Math.min(13, Math.round(13.0F * amount / FuelTankItem.CAPACITY)));
+    }
+
+    @Override
+    public int getBarColor(ItemStack stack) {
+        ItemStack bottle = getBottle(stack);
+        return bottle.getItem() instanceof OxygenTankItem ? 0x00AAFF : 0xFFAA00;
+    }
+
     @Override
     public void appendHoverText(ItemStack stack, TooltipContext context, List<Component> tooltip, TooltipFlag flag) {
         ItemStack bottle = getBottle(stack);

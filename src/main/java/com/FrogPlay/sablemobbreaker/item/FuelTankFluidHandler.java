@@ -26,7 +26,6 @@ public class FuelTankFluidHandler implements IFluidHandlerItem {
         return container;
     }
 
-    // Читает FluidStack из CustomData
     private FluidStack getFluid() {
         CustomData data = container.get(DataComponents.CUSTOM_DATA);
         if (data != null) {

@@ -15,7 +15,6 @@ import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.Mob;
 import net.minecraft.world.entity.MobCategory;
-import net.minecraft.world.entity.PathfinderMob;
 import net.minecraft.world.entity.projectile.Projectile;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.level.Level;
@@ -33,45 +32,57 @@ import java.util.Set;
 public class CommonEvents {
 
     private static final Set<ResourceLocation> FORCED_ATTACKERS = Set.of(
-            ResourceLocation.fromNamespaceAndPath("alexscaves", "hullbreaker"),
-            ResourceLocation.fromNamespaceAndPath("benssharks", "megalodon")
     );
 
     @SubscribeEvent
     public static void onEntityJoin(EntityJoinLevelEvent event) {
         if (event.getLevel().isClientSide()) return;
-        if (!(event.getEntity() instanceof Mob mob)) return;
+        if (event.getEntity() instanceof Mob mob) attachMobGoals(mob);
+    }
 
+    private static void attachMobGoals(Mob mob) {
         boolean isMonster = mob.getType().getCategory() == MobCategory.MONSTER;
         boolean isForced = FORCED_ATTACKERS.contains(BuiltInRegistries.ENTITY_TYPE.getKey(mob.getType()));
-        boolean hasGun = WeaponClassifier.isHoldingScorchedGunsWeapon(mob) || WeaponClassifier.isHoldingRangedWeapon(mob);
+        boolean hasRangedWeapon = WeaponClassifier.isHoldingRangedWeapon(mob);
         boolean naturalShooter = WeaponClassifier.isNaturalShooter(mob);
+        if (!isMonster && !isForced && !hasRangedWeapon && !naturalShooter) return;
 
-        if (!isMonster && !isForced && !hasGun && !naturalShooter) return;
-
-        boolean alreadyHasTarget = mob.targetSelector.getAvailableGoals().stream()
-                .anyMatch(wrapped -> wrapped.getGoal() instanceof SubLevelTargetGoal);
-        if (alreadyHasTarget) return;
-
-        SubLevelTargetGoal targetGoal = new SubLevelTargetGoal(mob, 24.0D);
-        mob.targetSelector.addGoal(3, targetGoal);
+        SubLevelTargetGoal targetGoal = null;
+        for (var wrapped : mob.targetSelector.getAvailableGoals()) {
+            if (wrapped.getGoal() instanceof SubLevelTargetGoal existing) {
+                targetGoal = existing;
+                break;
+            }
+        }
+        if (targetGoal == null) {
+            targetGoal = new SubLevelTargetGoal(mob, 24.0D);
+            mob.targetSelector.addGoal(3, targetGoal);
+        }
 
         boolean isBig = mob.getBbWidth() > 3.0F || mob.getBbHeight() > 3.0F;
-        if (isBig) {
+        if (isBig && !hasGoal(mob, RamSubLevelGoal.class)) {
             mob.goalSelector.addGoal(2, new RamSubLevelGoal(mob, targetGoal));
         }
-
-        if (WeaponClassifier.isRanged(mob) && mob instanceof PathfinderMob pathfinderMob) {
-            mob.goalSelector.addGoal(2, new SubLevelRangedAttackGoal(pathfinderMob, 24.0D, 16.0D, 20));
+        if (WeaponClassifier.isRanged(mob) && !hasGoal(mob, SubLevelRangedAttackGoal.class)) {
+            mob.goalSelector.addGoal(2, new SubLevelRangedAttackGoal(mob, 24.0D, 16.0D, 20));
         }
+        if (!hasGoal(mob, MeleeAttackSubLevelGoal.class)) {
+            mob.goalSelector.addGoal(3, new MeleeAttackSubLevelGoal(mob, 1.0D, targetGoal));
+        }
+    }
 
-        mob.goalSelector.addGoal(3, new MeleeAttackSubLevelGoal(mob, 1.0D, targetGoal));
+    private static boolean hasGoal(Mob mob, Class<? extends net.minecraft.world.entity.ai.goal.Goal> goalClass) {
+        return mob.goalSelector.getAvailableGoals().stream()
+                .anyMatch(wrapped -> goalClass.isInstance(wrapped.getGoal()));
     }
 
     @SubscribeEvent
     public static void onEntityTick(EntityTickEvent.Pre event) {
         if (event.getEntity().level().isClientSide()) return;
         Entity entity = event.getEntity();
+        if (entity instanceof Mob mob && mob.tickCount % 20 == 0) {
+            attachMobGoals(mob);
+        }
         if (entity instanceof Projectile projectile) {
             handleVanillaProjectile(projectile);
             return;
@@ -106,7 +117,6 @@ public class CommonEvents {
             boolean hit = damageAlongSubLevels(projectile, level, currentPos, movement, projectileBox, damage);
             if (hit) projectile.discard();
         } catch (ReflectiveOperationException ignored) {
-            // Unknown SCGuns projectile subtype: safely skip rather than breaking its own collision logic.
         }
     }
 
