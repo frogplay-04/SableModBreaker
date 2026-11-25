@@ -20,7 +20,7 @@ import java.util.UUID;
 public final class BlockHealthGameTests {
     private BlockHealthGameTests() {}
 
-    @GameTest(template = "empty")
+    @GameTest(template = "minecraft:empty")
     public static void blockHealthDamageAndReset(GameTestHelper helper) {
         UUID subLevelId = UUID.randomUUID();
         BlockPos pos = new BlockPos(2, 3, 4);
@@ -50,7 +50,7 @@ public final class BlockHealthGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty")
+    @GameTest(template = "minecraft:empty")
     public static void destroyedBlockDataIsRetained(GameTestHelper helper) {
         UUID subLevelId = UUID.randomUUID();
         BlockPos pos = new BlockPos(1, 2, 3);
