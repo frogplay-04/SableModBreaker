@@ -36,6 +36,52 @@ jobs:
         shell: powershell -NoProfile -ExecutionPolicy Bypass -Command "& '{0}'"
         run: .\gradlew.bat build --no-daemon
 
+      - name: Download test mods from Modrinth
+        shell: powershell -NoProfile -ExecutionPolicy Bypass -Command "& '{0}'"
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $modsDir = Join-Path $env:GITHUB_WORKSPACE 'run\mods'
+          New-Item -ItemType Directory -Force -Path $modsDir | Out-Null
+
+          # Root mods for the 1.21.1 NeoForge test profile.
+          $roots = @('sable', 'create', 'curios')
+          $queue = New-Object System.Collections.Queue
+          foreach ($slug in $roots) { $queue.Enqueue($slug) }
+          $seen = @{}
+
+          while ($queue.Count -gt 0) {
+            $project = [string]$queue.Dequeue()
+            if ($seen.ContainsKey($project)) { continue }
+            $seen[$project] = $true
+
+            $encodedLoaders = [uri]::EscapeDataString('["neoforge"]')
+            $encodedGame = [uri]::EscapeDataString('["1.21.1"]')
+            $api = "https://api.modrinth.com/v2/project/$project/version?loaders=$encodedLoaders&game_versions=$encodedGame"
+            Write-Host "Resolving Modrinth project: $project"
+            $versions = Invoke-RestMethod -Uri $api -Headers @{ 'User-Agent' = 'SableModBreaker-Test/1.0' }
+            $version = $versions | Where-Object { $_.version_type -eq 'release' } | Select-Object -First 1
+            if (-not $version) { throw "No released NeoForge 1.21.1 version found for '$project'." }
+
+            $file = $version.files | Where-Object { $_.primary } | Select-Object -First 1
+            if (-not $file) { $file = $version.files | Select-Object -First 1 }
+            if (-not $file) { throw "No downloadable file found for '$project'." }
+
+            $destination = Join-Path $modsDir $file.filename
+            if (-not (Test-Path $destination)) {
+              Write-Host "Downloading $($file.filename)"
+              Invoke-WebRequest -Uri $file.url -OutFile $destination -Headers @{ 'User-Agent' = 'SableModBreaker-Test/1.0' }
+            }
+
+            foreach ($dependency in $version.dependencies) {
+              if ($dependency.dependency_type -eq 'required' -and $dependency.project_id) {
+                $queue.Enqueue([string]$dependency.project_id)
+              }
+            }
+          }
+
+          Write-Host "Downloaded test mods:"
+          Get-ChildItem -Path $modsDir -Filter '*.jar' | ForEach-Object { Write-Host " - $($_.Name)" }
+
       - name: Launch Minecraft client and check startup
         shell: powershell -NoProfile -ExecutionPolicy Bypass -Command "& '{0}'"
         timeout-minutes: 6
