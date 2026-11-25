@@ -6,6 +6,7 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.world.level.block.Blocks;
 import net.neoforged.neoforge.gametest.GameTestHolder;
+import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
 import net.minecraft.gametest.framework.GameTest;
 import net.minecraft.gametest.framework.GameTestHelper;
 
@@ -17,10 +18,11 @@ import java.util.UUID;
  * shared manager rather than simulating player input.
  */
 @GameTestHolder(SableMobBreaker.MOD_ID)
+@PrefixGameTestTemplate(false)
 public final class BlockHealthGameTests {
     private BlockHealthGameTests() {}
 
-    @GameTest(template = "minecraft:empty")
+    @GameTest(template = "empty", templateNamespace = "minecraft")
     public static void blockHealthDamageAndReset(GameTestHelper helper) {
         UUID subLevelId = UUID.randomUUID();
         BlockPos pos = new BlockPos(2, 3, 4);
@@ -50,7 +52,7 @@ public final class BlockHealthGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "minecraft:empty")
+    @GameTest(template = "empty", templateNamespace = "minecraft")
     public static void destroyedBlockDataIsRetained(GameTestHelper helper) {
         UUID subLevelId = UUID.randomUUID();
         BlockPos pos = new BlockPos(1, 2, 3);
@@ -74,7 +76,7 @@ public final class BlockHealthGameTests {
         BlockHealthManager.removeDestroyedBlock(
                 subLevelId, pos.getX(), pos.getY(), pos.getZ());
         helper.assertTrue(BlockHealthManager.getDestroyedBlock(
-                        subLevelId, pos.getX(), pos.getY(), pos.getZ()) == null,
+                subLevelId, pos.getX(), pos.getY(), pos.getZ()) == null,
                 "Restored block data should be removable after repair.");
 
         helper.succeed();
