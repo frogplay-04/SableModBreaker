@@ -33,11 +33,11 @@ jobs:
         uses: gradle/actions/setup-gradle@v4
 
       - name: Build mod
-        shell: powershell
+        shell: powershell -NoProfile -ExecutionPolicy Bypass -Command "& '{0}'"
         run: .\gradlew.bat build --no-daemon
 
       - name: Launch Minecraft client and check startup
-        shell: powershell
+        shell: powershell -NoProfile -ExecutionPolicy Bypass -Command "& '{0}'"
         timeout-minutes: 6
         run: |
           $clientProcess = Start-Process -FilePath $env:ComSpec -ArgumentList @('/c', 'gradlew.bat runClient --no-daemon') -WorkingDirectory $env:GITHUB_WORKSPACE -PassThru
