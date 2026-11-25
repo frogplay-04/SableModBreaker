@@ -111,33 +111,6 @@ public class SubLevelDamageHelper {
                     subLevel.logicalPose().transformPosition(
                             new Vec3(targetBlock.getX() + 0.5, targetBlock.getY() + 0.5, targetBlock.getZ() + 0.5)));
 
-            if (newHp > 0) {
-                int progress = (int) (10.0F * (1.0F - (float) newHp / (float) maxHp));
-                if (progress <= 0) progress = 1;
-                if (progress > 9) progress = 9;
-
-                boolean hasNearbyPlayer = false;
-                for (ServerPlayer player : serverLevel.players()) {
-                    if (player.distanceToSqr(worldBlockPos.getX(), worldBlockPos.getY(), worldBlockPos.getZ()) < 4096) {
-                        hasNearbyPlayer = true;
-                        break;
-                    }
-                }
-                if (hasNearbyPlayer) {
-                    serverLevel.destroyBlockProgress(0, worldBlockPos, progress);
-                }
-            } else {
-                boolean hasNearbyPlayer = false;
-                for (ServerPlayer player : serverLevel.players()) {
-                    if (player.distanceToSqr(worldBlockPos.getX(), worldBlockPos.getY(), worldBlockPos.getZ()) < 4096) {
-                        hasNearbyPlayer = true;
-                        break;
-                    }
-                }
-                if (hasNearbyPlayer) {
-                    serverLevel.destroyBlockProgress(0, worldBlockPos, -1);
-                }
-            }
 
             if (newHp <= 0) {
                 try {

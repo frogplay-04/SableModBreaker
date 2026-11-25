@@ -25,7 +25,6 @@ import net.minecraft.core.component.DataComponents;
 import net.minecraft.core.particles.ParticleTypes;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.nbt.CompoundTag;
-import net.minecraft.network.protocol.game.ClientboundBlockEntityDataPacket;
 import net.minecraft.network.protocol.game.ClientboundBlockUpdatePacket;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
@@ -43,7 +42,6 @@ import net.minecraft.world.level.ClipContext;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.entity.BlockEntity;
-import net.minecraft.world.level.block.entity.BlockEntityType;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.chunk.LevelChunk;
 import net.minecraft.world.level.chunk.LevelChunkSection;
@@ -63,8 +61,6 @@ import net.neoforged.neoforge.fluids.FluidStack;
 import net.neoforged.neoforge.fluids.capability.IFluidHandler;
 import net.neoforged.neoforge.fluids.capability.IFluidHandlerItem;
 import net.neoforged.neoforge.network.PacketDistributor;
-
-import java.lang.reflect.Constructor;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
@@ -268,6 +264,23 @@ public class WeldingTorchHandler {
                 }
             }
 
+            // Plasma cutter: same periodic close-range damage as the welding torch.
+            if (player.tickCount % 10 == 0) {
+                List<LivingEntity> entities = level.getEntitiesOfClass(
+                        LivingEntity.class,
+                        player.getBoundingBox().inflate(1.5),
+                        e -> e != player && !(e instanceof Player));
+                for (LivingEntity mob : entities) {
+                    mob.igniteForSeconds(2);
+                    mob.hurt(player.damageSources().playerAttack(player), 1.0F);
+                    if (level instanceof ServerLevel serverLevel) {
+                        serverLevel.sendParticles(ParticleTypes.SOUL_FIRE_FLAME,
+                                mob.getX(), mob.getY() + 1.0D, mob.getZ(),
+                                5, 0.2D, 0.2D, 0.2D, 0.05D);
+                    }
+                }
+            }
+
             Vec3 eyePos = player.getEyePosition();
             Vec3 lookVec = player.getLookAngle();
             Vec3 targetVec = eyePos.add(lookVec.scale(4.5));
@@ -278,6 +291,8 @@ public class WeldingTorchHandler {
             ClipContext clipContext = new ClipContext(eyePos, targetVec, ClipContext.Block.OUTLINE, ClipContext.Fluid.NONE, player);
             BlockHitResult hitResult = level.clip(clipContext);
 
+            double vanillaHitDistance = hitResult.getType() == HitResult.Type.BLOCK
+                    ? eyePos.distanceTo(hitResult.getLocation()) : Double.MAX_VALUE;
             if (hitResult.getType() == HitResult.Type.BLOCK) {
                 BlockPos hitPos = hitResult.getBlockPos();
                 BlockState hitState = level.getBlockState(hitPos);
@@ -306,7 +321,8 @@ public class WeldingTorchHandler {
                     }
                     hitSomething = true;
                 }
-            } else {
+            }
+            {
                 // Sable blocks are not part of the vanilla world ray trace. Walk the player's
                 // ray through each intersected SubLevel and select the first real local block.
                 SubLevelContainer container = SubLevelContainer.getContainer(level);
@@ -347,7 +363,7 @@ public class WeldingTorchHandler {
                         }
                     }
 
-                    if (bestSubLevel != null && bestLocalPos != null) {
+                    if (bestSubLevel != null && bestLocalPos != null && bestDistance < vanillaHitDistance) {
                         boolean changedTarget = data.subLevel != bestSubLevel
                                 || data.subLevelLocalPos == null
                                 || !data.subLevelLocalPos.equals(bestLocalPos);
@@ -575,13 +591,13 @@ public class WeldingTorchHandler {
             if (!fluid.isEmpty()) {
                 String id = BuiltInRegistries.FLUID.getKey(fluid.getFluid()).toString();
                 if (id.contains("propane") || id.contains("butane")) {
-                    return Math.min(FuelTankItem.CAPACITY, fluid.getAmount());
+                    return fluid.getAmount();
                 }
             }
         }
         if (isCustomFuelBottle(bottle)) {
             CustomData data = bottle.getOrDefault(DataComponents.CUSTOM_DATA, CustomData.EMPTY);
-            return Math.min(FuelTankItem.CAPACITY, Math.max(0, data.copyTag().getInt("GasStored")));
+            return Math.min(2000, data.copyTag().getInt("GasStored"));
         }
         return 0;
     }
@@ -622,7 +638,8 @@ public class WeldingTorchHandler {
 
         int localX = plotGridBlockPos.getX() & 15;
         int localZ = plotGridBlockPos.getZ() & 15;
-        BlockPos blockInChunk = new BlockPos(localX, y, localZ);
+        // LevelChunk APIs use absolute plot coordinates; only LevelChunkSection uses x/z masked to 0..15.
+        BlockPos blockInChunk = plotGridBlockPos.immutable();
         BlockState state = chunk.getBlockState(blockInChunk);
         BlockEntity blockEntity = chunk.getBlockEntity(blockInChunk);
 
@@ -681,44 +698,28 @@ public class WeldingTorchHandler {
         return true;
     }
     private static boolean isWearingCreateGoggles(ServerPlayer player) {
-        ItemStack headStack = player.getItemBySlot(net.minecraft.world.entity.EquipmentSlot.HEAD);
-        if (isCreateGogglesItem(headStack)) return true;
+        if (isCreateGogglesItem(player.getItemBySlot(EquipmentSlot.HEAD))) return true;
+        if (!ModList.get().isLoaded("curios")) return false;
+        try {
+            ClassLoader loader = player.getClass().getClassLoader();
+            Class<?> api = Class.forName("top.theillusivec4.curios.api.CuriosApi", false, loader);
+            Object result = api.getMethod("getCuriosInventory", LivingEntity.class).invoke(null, player);
+            if (!(result instanceof java.util.Optional<?> optional) || optional.isEmpty()) return false;
 
-        if (net.neoforged.fml.ModList.get().isLoaded("curios")) {
-            try {
-                Class<?> curiosApiClass = Class.forName("top.theillusivec4.curios.api.CuriosApi");
-                java.lang.reflect.Method getInvMethod = curiosApiClass.getMethod("getCuriosInventory", net.minecraft.world.entity.LivingEntity.class);
-                Object lazyOptional = getInvMethod.invoke(null, player);
-
-                java.lang.reflect.Method resolveMethod = lazyOptional.getClass().getMethod("resolve");
-                java.util.Optional<?> optInv = (java.util.Optional<?>) resolveMethod.invoke(lazyOptional);
-
-                if (optInv.isPresent()) {
-                    Object inventory = optInv.get();
-                    java.lang.reflect.Method getStacksHandler = inventory.getClass().getMethod("getStacksHandler", String.class);
-                    Object handlerOpt = getStacksHandler.invoke(inventory, "head");
-                    java.util.Optional<?> optHandler = (java.util.Optional<?>) resolveMethod.invoke(handlerOpt);
-
-                    if (optHandler.isPresent()) {
-                        Object handler = optHandler.get();
-                        java.lang.reflect.Method getStacksMethod = handler.getClass().getMethod("getStacks");
-                        Object stacks = getStacksMethod.invoke(handler);
-
-                        java.lang.reflect.Method getSlotsMethod = stacks.getClass().getMethod("getSlots");
-                        java.lang.reflect.Method getStackMethod = stacks.getClass().getMethod("getStackInSlot", int.class);
-
-                        int slots = (int) getSlotsMethod.invoke(stacks);
-                        for (int i = 0; i < slots; i++) {
-                            ItemStack stack = (ItemStack) getStackMethod.invoke(stacks, i);
-                            if (isCreateGogglesItem(stack)) return true;
-                        }
-                    }
-                }
-            } catch (Throwable ignored) {
-            }
+            Class<?> handlerApi = Class.forName(
+                    "top.theillusivec4.curios.api.type.capability.ICuriosItemHandler", false, loader);
+            java.lang.reflect.Method findFirst = handlerApi.getMethod(
+                    "findFirstCurio", java.util.function.Predicate.class, String.class);
+            Object found = findFirst.invoke(optional.get(),
+                    (java.util.function.Predicate<ItemStack>) WeldingTorchHandler::isCreateGogglesItem,
+                    "head");
+            if (!(found instanceof java.util.Optional<?> foundOptional) || foundOptional.isEmpty()) return false;
+            Object slotResult = foundOptional.get();
+            ItemStack stack = (ItemStack) slotResult.getClass().getMethod("stack").invoke(slotResult);
+            return isCreateGogglesItem(stack);
+        } catch (Throwable ignored) {
+            return false;
         }
-
-        return false;
     }
 
     private static boolean isCreateGogglesItem(ItemStack stack) {

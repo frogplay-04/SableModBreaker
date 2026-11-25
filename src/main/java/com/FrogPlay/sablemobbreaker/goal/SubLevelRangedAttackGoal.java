@@ -42,6 +42,8 @@ public class SubLevelRangedAttackGoal extends Goal {
     private SubLevel targetSubLevel;
     private BlockPos targetLocalPos;
     private ArmorStand virtualTarget;
+    private Vec3 approachPoint;
+    private int pathRefreshTicks;
 
     public SubLevelRangedAttackGoal(Mob mob, double searchRadius, double attackRange, int fireCooldownTicks) {
         this.mob = mob;
@@ -49,8 +51,7 @@ public class SubLevelRangedAttackGoal extends Goal {
         this.attackRange = attackRange;
         this.fireCooldownTicks = fireCooldownTicks;
         this.nativeRangedAi = WeaponClassifier.hasNativeRangedAi(mob);
-        // Native ranged goals (Blaze/Ghast/Skeleton/etc.) must be allowed to run their
-        // own movement, aiming, draw, firing and animation logic.
+
         this.setFlags(nativeRangedAi ? EnumSet.noneOf(Flag.class) : EnumSet.of(Flag.MOVE, Flag.LOOK));
     }
 
@@ -64,6 +65,7 @@ public class SubLevelRangedAttackGoal extends Goal {
         if (found.isEmpty()) return false;
         targetSubLevel = found.get().subLevel();
         targetLocalPos = found.get().localPos();
+        approachPoint = calculateApproachPoint();
         return true;
     }
 
@@ -107,6 +109,8 @@ public class SubLevelRangedAttackGoal extends Goal {
         drawing = false;
         targetSubLevel = null;
         targetLocalPos = null;
+        approachPoint = null;
+        pathRefreshTicks = 0;
         mob.getNavigation().stop();
     }
 
@@ -122,11 +126,13 @@ public class SubLevelRangedAttackGoal extends Goal {
         }
 
         Vec3 targetPos = SubLevelTargetHelper.localToWorld(targetSubLevel, targetLocalPos);
+        approachPoint = calculateApproachPoint();
         if (nativeRangedAi) {
             if (virtualTarget == null) return;
             if (mob.getTarget() != null && mob.getTarget() != virtualTarget && mob.getTarget().isAlive()) return;
             mob.setTarget(virtualTarget);
-            virtualTarget.setPos(targetPos.x, targetPos.y, targetPos.z);
+            Vec3 reachableAim = approachPoint == null ? targetPos : approachPoint;
+            virtualTarget.setPos(reachableAim.x, reachableAim.y, reachableAim.z);
             virtualTarget.setYRot(mob.getYRot());
             return;
         }
@@ -134,15 +140,22 @@ public class SubLevelRangedAttackGoal extends Goal {
         double distSqr = mob.position().distanceToSqr(targetPos);
         mob.getLookControl().setLookAt(targetPos.x, targetPos.y, targetPos.z);
         if (distSqr > attackRange * attackRange) {
-            mob.getNavigation().moveTo(targetPos.x, targetPos.y, targetPos.z, 1.0D);
+
+            Vec3 walkTo = approachPoint == null ? targetPos : approachPoint;
+            if (pathRefreshTicks-- <= 0 || mob.getNavigation().isDone()) {
+                mob.getNavigation().moveTo(walkTo.x, walkTo.y, walkTo.z, 1.0D);
+                pathRefreshTicks = 12;
+            }
             return;
         }
+        pathRefreshTicks = 0;
         mob.getNavigation().stop();
         if (!SubLevelTargetHelper.hasLineOfSight(mob, targetPos)) return;
 
         if (mob instanceof net.minecraft.world.entity.monster.RangedAttackMob rangedMob) {
             if (virtualTarget == null) return;
-            virtualTarget.setPos(targetPos.x, targetPos.y, targetPos.z);
+            Vec3 reachableAim = approachPoint == null ? targetPos : approachPoint;
+            virtualTarget.setPos(reachableAim.x, reachableAim.y, reachableAim.z);
             if (cooldown > 0) {
                 cooldown--;
                 return;
@@ -174,6 +187,7 @@ public class SubLevelRangedAttackGoal extends Goal {
 
     private void fireHeldVanillaWeapon(Vec3 targetPos) {
         ItemStack main = mob.getMainHandItem();
+        ItemStack off = mob.getOffhandItem();
         firingHand = !main.isEmpty() && WeaponClassifier.isRangedWeapon(main)
                 ? InteractionHand.MAIN_HAND : InteractionHand.OFF_HAND;
         ItemStack weapon = mob.getItemInHand(firingHand);
@@ -229,8 +243,33 @@ public class SubLevelRangedAttackGoal extends Goal {
 
     private void moveVirtualTarget() {
         if (virtualTarget == null || targetSubLevel == null || targetLocalPos == null) return;
-        Vec3 pos = SubLevelTargetHelper.localToWorld(targetSubLevel, targetLocalPos);
+        Vec3 pos = approachPoint == null ? SubLevelTargetHelper.localToWorld(targetSubLevel, targetLocalPos) : approachPoint;
         virtualTarget.setPos(pos.x, pos.y, pos.z);
+    }
+
+    private Vec3 calculateApproachPoint() {
+        if (targetSubLevel == null || targetSubLevel.isRemoved()) return null;
+        var bounds = targetSubLevel.boundingBox();
+        double minX = bounds.minX(), maxX = bounds.maxX();
+        double minY = bounds.minY(), maxY = bounds.maxY();
+        double minZ = bounds.minZ(), maxZ = bounds.maxZ();
+        double mx = mob.getX(), my = mob.getY(), mz = mob.getZ();
+        double x = Math.max(minX, Math.min(maxX, mx));
+        double z = Math.max(minZ, Math.min(maxZ, mz));
+        double dx = mx - x, dz = mz - z;
+        double length = Math.sqrt(dx * dx + dz * dz);
+        if (length < 0.01D) {
+            double left = Math.abs(mx - minX), right = Math.abs(maxX - mx);
+            double north = Math.abs(mz - minZ), south = Math.abs(maxZ - mz);
+            double nearest = Math.min(Math.min(left, right), Math.min(north, south));
+            if (nearest == left) dx = -1.0D;
+            else if (nearest == right) dx = 1.0D;
+            else if (nearest == north) dz = -1.0D;
+            else dz = 1.0D;
+            length = 1.0D;
+        }
+        double y = Math.max(minY, Math.min(maxY, my));
+        return new Vec3(x + dx / length * 2.5D, y, z + dz / length * 2.5D);
     }
 
     private boolean isTargetBlockGone() {
@@ -250,6 +289,7 @@ public class SubLevelRangedAttackGoal extends Goal {
         if (found.isPresent()) {
             targetSubLevel = found.get().subLevel();
             targetLocalPos = found.get().localPos();
+            approachPoint = calculateApproachPoint();
             moveVirtualTarget();
         }
     }
