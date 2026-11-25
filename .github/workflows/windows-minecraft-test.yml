@@ -12,7 +12,7 @@ concurrency:
 
 jobs:
   build-and-launch:
-    # This job runs only when manually started, on the owner's registered Windows runner.
+    # Manual-only job on the owner's registered Windows runner.
     runs-on: [self-hosted, Windows, X64]
     timeout-minutes: 12
 
@@ -33,11 +33,11 @@ jobs:
         uses: gradle/actions/setup-gradle@v4
 
       - name: Build mod
-        shell: pwsh
+        shell: powershell
         run: .\gradlew.bat build --no-daemon
 
       - name: Launch Minecraft client and check startup
-        shell: pwsh
+        shell: powershell
         timeout-minutes: 6
         run: |
           $clientProcess = Start-Process -FilePath $env:ComSpec -ArgumentList @('/c', 'gradlew.bat runClient --no-daemon') -WorkingDirectory $env:GITHUB_WORKSPACE -PassThru
