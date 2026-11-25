@@ -14,7 +14,7 @@ jobs:
   build-and-launch:
     # Manual-only job on the owner's registered Windows runner.
     runs-on: [self-hosted, Windows, X64]
-    timeout-minutes: 12
+    timeout-minutes: 25
 
     steps:
       - name: Checkout repository
@@ -35,6 +35,17 @@ jobs:
       - name: Build mod
         shell: powershell -NoProfile -ExecutionPolicy Bypass -Command "& '{0}'"
         run: .\gradlew.bat build --no-daemon
+
+      - name: Run server-side GameTests
+        shell: powershell -NoProfile -ExecutionPolicy Bypass -Command "& '{0}'"
+        timeout-minutes: 8
+        run: |
+          Write-Host "Running NeoForge GameTests for sablemobbreaker..."
+          .\gradlew.bat runGameTestServer --no-daemon --stacktrace
+          if ($LASTEXITCODE -ne 0) {
+            Write-Error "NeoForge GameTests failed. See run/logs/latest.log in the uploaded artifact."
+            exit $LASTEXITCODE
+          }
 
       - name: Launch Minecraft client and check startup
         shell: powershell -NoProfile -ExecutionPolicy Bypass -Command "& '{0}'"
