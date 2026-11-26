@@ -14,6 +14,7 @@ import com.FrogPlay.sablemobbreaker.network.BlockHealthSyncPacket;
 import com.FrogPlay.sablemobbreaker.network.RepairHpNoticePacket;
 import com.FrogPlay.sablemobbreaker.util.BlockHealthManager;
 import com.FrogPlay.sablemobbreaker.util.SubLevelDamageHelper;
+import com.FrogPlay.sablemobbreaker.util.SubLevelRaycast;
 import com.FrogPlay.sablemobbreaker.util.WeldManager;
 import dev.ryanhcode.sable.api.sublevel.SubLevelContainer;
 import dev.ryanhcode.sable.companion.math.BoundingBox3dc;
@@ -138,8 +139,10 @@ public class WeldingTorchHandler {
 
         ItemStack mainHand = player.getMainHandItem();
         Level level = player.level();
+        boolean rightUse = DoorWeldHandler.isRightUse(player.getUUID());
 
-        if (mainHand.getItem() instanceof WeldingTorchItem && WeldingTorchItem.isOn(mainHand)) {
+        if (mainHand.getItem() instanceof WeldingTorchItem
+                && (WeldingTorchItem.isOn(mainHand) || rightUse)) {
             ItemStack bottle = WeldingTorchItem.getBottle(mainHand);
 
             if (bottle.getItem() instanceof OxygenTankItem) {
@@ -154,6 +157,7 @@ public class WeldingTorchHandler {
 
             if (fuel <= 0) {
                 WeldingTorchItem.setOn(mainHand, false);
+                DoorWeldHandler.setRightUse(player.getUUID(), false);
                 level.playSound(null, player.getX(), player.getY(), player.getZ(),
                         SoundEvents.FIRE_EXTINGUISH, SoundSource.PLAYERS, 0.5f, 1.0f);
                 return;
@@ -186,7 +190,7 @@ public class WeldingTorchHandler {
                 }
             }
 
-            if (player.tickCount % 5 == 0) {
+            if (WeldingTorchItem.isOn(mainHand) && !rightUse && player.tickCount % 5 == 0) {
                 SubLevelContainer container = SubLevelContainer.getContainer(level);
                 if (container != null) {
                     Vec3 rayStart = player.getEyePosition();
@@ -230,13 +234,15 @@ public class WeldingTorchHandler {
                 WeldingTorchItem.setBottle(mainHand, bottle);
                 if (getFuelAmount(bottle) <= 0) {
                     WeldingTorchItem.setOn(mainHand, false);
+                    DoorWeldHandler.setRightUse(player.getUUID(), false);
                     level.playSound(null, player.getX(), player.getY(), player.getZ(),
                             SoundEvents.FIRE_EXTINGUISH, SoundSource.PLAYERS, 0.5f, 1.0f);
                 }
             }
         }
 
-        if (mainHand.getItem() instanceof PlasmaCutterItem && PlasmaCutterItem.isOn(mainHand)) {
+        if (mainHand.getItem() instanceof PlasmaCutterItem
+                && (PlasmaCutterItem.isOn(mainHand) || rightUse)) {
             ItemStack bottle = PlasmaCutterItem.getBottle(mainHand);
 
             if (bottle.getItem() instanceof FuelTankItem || getFuelAmount(bottle) > 0) {
@@ -252,8 +258,14 @@ public class WeldingTorchHandler {
             }
             if (air <= 0) {
                 PlasmaCutterItem.setOn(mainHand, false);
+                DoorWeldHandler.setRightUse(player.getUUID(), false);
                 level.playSound(null, player.getX(), player.getY(), player.getZ(), SoundEvents.FIRE_EXTINGUISH, SoundSource.PLAYERS, 0.5f, 1.0f);
                 return;
+            }
+
+            if (rightUse && !PlasmaCutterItem.isOn(mainHand) && player.tickCount % 20 == 0) {
+                OxygenTankItem.setAir(bottle, Math.max(0, air - 1));
+                PlasmaCutterItem.setBottle(mainHand, bottle);
             }
 
             if (player.tickCount % 2 == 0 && level instanceof ServerLevel serverLevel) {
@@ -281,6 +293,7 @@ public class WeldingTorchHandler {
                 }
             }
 
+            if (PlasmaCutterItem.isOn(mainHand) && !rightUse) {
             Vec3 eyePos = player.getEyePosition();
             Vec3 lookVec = player.getLookAngle();
             Vec3 targetVec = eyePos.add(lookVec.scale(4.5));
@@ -323,60 +336,30 @@ public class WeldingTorchHandler {
                 }
             }
             {
-                // Sable blocks are not part of the vanilla world ray trace. Walk the player's
-                // ray through each intersected SubLevel and select the first real local block.
-                SubLevelContainer container = SubLevelContainer.getContainer(level);
-                if (container != null) {
-                    SubLevel bestSubLevel = null;
-                    BlockPos bestLocalPos = null;
-                    double bestDistance = Double.MAX_VALUE;
+                // Sable raycast must also work when the player is already inside
+                // the sub-level bounds (for example, standing on the construction).
+                SubLevelRaycast.Hit subLevelHit = SubLevelRaycast.trace(
+                        level, eyePos, lookVec, 4.5D,
+                        state -> !state.isAir()
+                                && !state.is(ModBlocks.BROKEN_BLOCK.get())
+                                && !SubLevelDamageHelper.isIgnoredBlock(state)
+                );
 
-                    for (SubLevel sl : container.getAllSubLevels()) {
-                        if (sl.isRemoved()) continue;
-                        var bounds = sl.boundingBox();
-                        AABB worldBounds = new AABB(bounds.minX(), bounds.minY(), bounds.minZ(),
-                                bounds.maxX(), bounds.maxY(), bounds.maxZ());
-                        java.util.Optional<Vec3> boundsHit = worldBounds.clip(eyePos, targetVec);
-                        if (boundsHit.isEmpty()) continue;
-
-                        double enterDistance = eyePos.distanceTo(boundsHit.get());
-                        for (double distance = enterDistance; distance <= 4.5D; distance += 0.05D) {
-                            Vec3 sample = eyePos.add(lookVec.scale(distance));
-                            Vec3 localVec = sl.logicalPose().transformPositionInverse(sample);
-                            BlockPos localBlockPos = BlockPos.containing(localVec.x, localVec.y, localVec.z);
-                            ChunkPos chunkPos = new ChunkPos(localBlockPos.getX() >> 4, localBlockPos.getZ() >> 4);
-                            if (!container.inBounds(chunkPos)) continue;
-                            LevelChunk subLevelChunk = container.getChunk(chunkPos);
-                            if (subLevelChunk == null) continue;
-
-                            BlockState subLevelState = subLevelChunk.getBlockState(localBlockPos);
-                            if (subLevelState.isAir() || subLevelState.is(ModBlocks.BROKEN_BLOCK.get())
-                                    || SubLevelDamageHelper.isIgnoredBlock(subLevelState)
-                                    || subLevelState.getDestroySpeed(subLevelChunk, localBlockPos) < 0.0F) continue;
-
-                            if (distance < bestDistance) {
-                                bestDistance = distance;
-                                bestSubLevel = sl;
-                                bestLocalPos = localBlockPos.immutable();
-                            }
-                            break;
-                        }
+                if (subLevelHit != null && subLevelHit.distance() <= vanillaHitDistance + 0.20D) {
+                    SubLevel bestSubLevel = subLevelHit.subLevel();
+                    BlockPos bestLocalPos = subLevelHit.localPos();
+                    boolean changedTarget = data.subLevel != bestSubLevel
+                            || data.subLevelLocalPos == null
+                            || !data.subLevelLocalPos.equals(bestLocalPos);
+                    data.subLevel = bestSubLevel;
+                    data.subLevelLocalPos = bestLocalPos;
+                    data.pos = BlockPos.containing(subLevelHit.worldLocation());
+                    data.state = subLevelHit.state();
+                    if (changedTarget) {
+                        data.progress = 0.0F;
+                        data.subLevelDamageRemainder = 0.0F;
                     }
-
-                    if (bestSubLevel != null && bestLocalPos != null && bestDistance < vanillaHitDistance) {
-                        boolean changedTarget = data.subLevel != bestSubLevel
-                                || data.subLevelLocalPos == null
-                                || !data.subLevelLocalPos.equals(bestLocalPos);
-                        data.subLevel = bestSubLevel;
-                        data.subLevelLocalPos = bestLocalPos;
-                        data.pos = BlockPos.containing(eyePos.add(lookVec.scale(bestDistance)));
-                        data.state = getSubLevelBlockState(container, bestLocalPos);
-                        if (changedTarget) {
-                            data.progress = 0.0F;
-                            data.subLevelDamageRemainder = 0.0F;
-                        }
-                        hitSomething = data.state != null && !data.state.isAir();
-                    }
+                    hitSomething = true;
                 }
             }
 
@@ -428,8 +411,10 @@ public class WeldingTorchHandler {
                     }
 
                     if (level instanceof ServerLevel serverLevel) {
-                        int stage = Math.min(9, Math.max(0, (int) (data.progress * 10.0F)));
-                        serverLevel.destroyBlockProgress(player.getId(), data.pos, stage);
+                        if (data.progress > 0.0F) {
+                            int stage = Math.min(9, Math.max(1, (int) (data.progress * 10.0F)));
+                            serverLevel.destroyBlockProgress(player.getId(), data.pos, stage);
+                        }
                     }
 
                     if (data.progress >= 1.0F) {
@@ -480,6 +465,9 @@ public class WeldingTorchHandler {
                 data.state = null;
                 data.subLevel = null;
                 data.subLevelLocalPos = null;
+            }
+            } else {
+                MINING_DATA.remove(player.getUUID());
             }
         } else {
             MINING_DATA.remove(player.getUUID());
@@ -669,10 +657,11 @@ public class WeldingTorchHandler {
                     if (restoredBe != null) chunk.setBlockEntity(restoredBe);
                 }
                 chunk.setUnsaved(true);
+                holder.blockChanged(blockInChunk);
                 int maxHp = BlockHealthManager.getMaxHp(restoredState, restoredBe);
                 int restoredHp = Math.min(maxHp, repairAmount);
                 BlockHealthManager.setHp(subId, plotGridBlockPos.getX(), y, plotGridBlockPos.getZ(), restoredHp);
-                sendRepairUpdate(serverLevel, plotGridBlockPos, restoredState, subId, restoredHp, maxHp, hitVec);
+                sendRepairUpdate(serverLevel, plotGridBlockPos, subId, restoredHp, maxHp, hitVec);
                 if (player instanceof ServerPlayer serverPlayer && !isWearingCreateGoggles(serverPlayer)) {
                     PacketDistributor.sendToPlayer(serverPlayer, new RepairHpNoticePacket(subId, plotGridBlockPos.getX(), y, plotGridBlockPos.getZ(), restoredHp, maxHp));
                 }
@@ -691,7 +680,7 @@ public class WeldingTorchHandler {
 
         int newHp = Math.min(maxHp, currentHp + repairAmount);
         BlockHealthManager.setHp(subId, plotGridBlockPos.getX(), y, plotGridBlockPos.getZ(), newHp);
-        sendRepairUpdate(serverLevel, plotGridBlockPos, state, subId, newHp, maxHp, hitVec);
+        sendRepairUpdate(serverLevel, plotGridBlockPos, subId, newHp, maxHp, hitVec);
         if (player instanceof ServerPlayer serverPlayer && !isWearingCreateGoggles(serverPlayer)) {
             PacketDistributor.sendToPlayer(serverPlayer, new RepairHpNoticePacket(subId, plotGridBlockPos.getX(), y, plotGridBlockPos.getZ(), newHp, maxHp));
         }
@@ -728,14 +717,12 @@ public class WeldingTorchHandler {
         return ResourceLocation.fromNamespaceAndPath("create", "goggles").equals(itemId);
     }
 
-    private static void sendRepairUpdate(ServerLevel level, BlockPos pos, BlockState state, UUID subId,
+    private static void sendRepairUpdate(ServerLevel level, BlockPos pos, UUID subId,
                                          int hp, int maxHp, Vec3 hitVec) {
-        ClientboundBlockUpdatePacket blockPacket = new ClientboundBlockUpdatePacket(pos, state);
         BlockHealthSyncPacket hpPacket = new BlockHealthSyncPacket(
                 subId, pos.getX(), pos.getY(), pos.getZ(), hp, maxHp);
         for (ServerPlayer viewer : level.players()) {
             if (viewer.distanceToSqr(hitVec.x, hitVec.y, hitVec.z) < 4096) {
-                viewer.connection.send(blockPacket);
                 PacketDistributor.sendToPlayer(viewer, hpPacket);
             }
         }

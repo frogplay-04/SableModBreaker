@@ -10,7 +10,6 @@ import dev.ryanhcode.sable.sublevel.plot.PlotChunkHolder;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.nbt.CompoundTag;
-import net.minecraft.network.protocol.game.ClientboundBlockUpdatePacket;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
@@ -114,8 +113,10 @@ public class SubLevelDamageHelper {
 
             if (newHp <= 0) {
                 try {
-                    if (!serverLevel.isLoaded(worldBlockPos)) return false;
-
+                    // Sub-level blocks are stored in Sable's plot chunks, not at their
+                    // transformed world coordinates. Checking ServerLevel.isLoaded(worldBlockPos)
+                    // incorrectly rejects valid sub-level blocks when the visible world chunk
+                    // is not loaded. The plot chunk and holder were already resolved above.
                     BlockState recheck = chunk.getBlockState(targetBlock);
                     if (recheck != oldState) return false;
 
@@ -157,6 +158,7 @@ public class SubLevelDamageHelper {
                                 chunk.setBlockEntity(brokenBe);
                                 brokenBe.setChanged();
                                 chunk.setUnsaved(true);
+                                holder.blockChanged(targetBlock);
                             }
                         }
                     } catch (Throwable t) {
@@ -165,12 +167,6 @@ public class SubLevelDamageHelper {
 
                     BlockHealthManager.setHp(id, targetBlock.getX(), targetBlock.getY(), targetBlock.getZ(), 0);
 
-                    ClientboundBlockUpdatePacket packet = new ClientboundBlockUpdatePacket(targetBlock, brokenState);
-                    for (ServerPlayer player : serverLevel.players()) {
-                        if (player.distanceToSqr(worldBlockPos.getX(), worldBlockPos.getY(), worldBlockPos.getZ()) < 4096) {
-                            player.connection.send(packet);
-                        }
-                    }
                 } catch (Throwable t) {
                     SableMobBreaker.LOGGER.error("[SMB] Deletion error: {}", t.toString());
                 }

@@ -3,6 +3,7 @@ package com.FrogPlay.sablemobbreaker.util;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.Level;
+import net.minecraft.world.level.block.state.BlockState;
 
 import java.util.Set;
 public final class WeldManager {
@@ -29,9 +30,13 @@ public final class WeldManager {
     }
 
     public static boolean isWelded(Level level, BlockPos pos) {
+        return isWelded(level, pos, level.getBlockState(pos));
+    }
+
+    public static boolean isWelded(Level level, BlockPos pos, BlockState state) {
         WeldSavedData data = data(level);
         if (data == null || !data.positions().contains(pos.asLong())) return false;
-        if (!WeldGeometry.isEligible(level.getBlockState(pos))) {
+        if (!WeldGeometry.isEligible(state)) {
             data.positions().remove(pos.asLong());
             data.setDirty();
             return false;

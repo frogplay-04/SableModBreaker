@@ -6,10 +6,12 @@ import com.FrogPlay.sablemobbreaker.item.WeldingTorchItem;
 import com.FrogPlay.sablemobbreaker.network.SetTorchStatePacket;
 import com.FrogPlay.sablemobbreaker.network.SetToolUsePacket;
 import com.FrogPlay.sablemobbreaker.util.WeldGeometry;
+import com.FrogPlay.sablemobbreaker.util.SubLevelRaycast;
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.blaze3d.vertex.VertexConsumer;
 import dev.ryanhcode.sable.api.sublevel.SubLevelContainer;
 import dev.ryanhcode.sable.sublevel.SubLevel;
+import dev.ryanhcode.sable.sublevel.ClientSubLevel;
 import net.minecraft.client.Camera;
 import net.minecraft.client.Minecraft;
 import net.minecraft.core.BlockPos;
@@ -35,8 +37,8 @@ import net.neoforged.neoforge.client.event.RenderLevelStageEvent;
 import net.neoforged.neoforge.network.PacketDistributor;
 import org.joml.Matrix4f;
 import org.joml.Quaternionf;
-import org.joml.Vector3d;
 import org.joml.Vector4f;
+import org.joml.Matrix3f;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -72,6 +74,20 @@ public class ClientEvents {
     private static int repairNoticeTicks = 0;
     private static int repairNoticeHp = 0;
     private static int repairNoticeMaxHp = 0;
+
+    public static void markSubLevelBlockDirty(UUID subLevelId, int x, int y, int z) {
+        Minecraft mc = Minecraft.getInstance();
+        if (mc.level == null) return;
+        SubLevel subLevel = getSubLevel(mc.level, subLevelId);
+        if (!(subLevel instanceof ClientSubLevel clientSubLevel)) return;
+        int sectionX = x >> 4;
+        int sectionY = y >> 4;
+        int sectionZ = z >> 4;
+        clientSubLevel.getRenderData().setDirty(sectionX, sectionY, sectionZ, true);
+        if (mc.levelRenderer != null) {
+            mc.levelRenderer.setSectionDirty(sectionX, sectionY, sectionZ);
+        }
+    }
 
     public static void showRepairHp(UUID subLevelId, int x, int y, int z, int hp, int maxHp) {
         repairNoticeHp = hp;
@@ -129,7 +145,7 @@ public class ClientEvents {
 
     @SubscribeEvent
     public static void onRenderLevel(RenderLevelStageEvent event) {
-        if (event.getStage() != RenderLevelStageEvent.Stage.AFTER_TRANSLUCENT_BLOCKS) return;
+        if (event.getStage() != RenderLevelStageEvent.Stage.AFTER_LEVEL) return;
 
         Minecraft mc = Minecraft.getInstance();
         if (mc.level == null) return;
@@ -145,42 +161,28 @@ public class ClientEvents {
             if (data.hp() >= data.maxHp()) continue;
 
             SubLevel sl = getSubLevel(mc.level, key.subLevelId());
-            if (sl == null) continue;
+            if (!(sl instanceof ClientSubLevel clientSubLevel)) continue;
 
             BlockState state = SableMobBreakerClient.getBlockStateAt(key.subLevelId(), key.x(), key.y(), key.z());
             if (state == null || state.isAir()
                     || state.is(com.FrogPlay.sablemobbreaker.block.ModBlocks.BROKEN_BLOCK.get())) continue;
 
             int progress = (int) (10.0F * (1.0F - (float) data.hp() / data.maxHp()));
-            if (progress <= 0) progress = 1;
-            if (progress > 9) progress = 9;
+            progress = Math.max(1, Math.min(9, progress));
 
             ResourceLocation texture = ResourceLocation.withDefaultNamespace("textures/block/destroy_stage_" + progress + ".png");
             RenderType type = RenderType.entityTranslucent(texture);
             VertexConsumer vc = buffer.getBuffer(type);
 
             poseStack.pushPose();
-            Vector3d anchor = sl.logicalPose().position();
-            poseStack.translate(anchor.x - cam.x, anchor.y - cam.y, anchor.z - cam.z);
+            Matrix4f subLevelTransform = clientSubLevel.getRenderData()
+                    .getTransformation(cam.x, cam.y, cam.z);
 
-            try {
-                Object pose = sl.logicalPose();
-                for (java.lang.reflect.Method method : pose.getClass().getMethods()) {
-                    String name = method.getName();
-                    if ((name.equals("orientation") || name.equals("rotation") || name.equals("quaternion"))
-                            && method.getParameterCount() == 0) {
-                        Object result = method.invoke(pose);
-                        if (result instanceof Quaternionf q) {
-                            poseStack.mulPose(q);
-                            break;
-                        }
-                    }
-                }
-            } catch (Throwable ignored) {}
-
+            poseStack.last().pose().mul(subLevelTransform);
+            poseStack.last().normal().mul(subLevelTransform.normal(new Matrix3f()));
             poseStack.translate(key.x(), key.y(), key.z());
 
-            renderCube(poseStack, vc);
+            renderBlockCrackOverlay(poseStack, vc, state, mc.level, new BlockPos(key.x(), key.y(), key.z()));
 
             poseStack.popPose();
         }
@@ -190,54 +192,86 @@ public class ClientEvents {
     }
 
     private static void renderWeldOutline(Minecraft mc, PoseStack poseStack, Vec3 camera, MultiBufferSource.BufferSource buffer) {
-        if (mc.player == null || mc.hitResult == null) {
+        if (mc.player == null || mc.level == null) {
             clientWeldTrace.clear();
             clientWeldAssembly = "";
             return;
         }
         var held = mc.player.getMainHandItem().getItem();
-        boolean welding = held instanceof WeldingTorchItem && WeldingTorchItem.isOn(mc.player.getMainHandItem());
-        boolean cutting = held instanceof PlasmaCutterItem && PlasmaCutterItem.isOn(mc.player.getMainHandItem());
+        boolean rightUseDown = mc.options.keyUse.isDown();
+        boolean welding = held instanceof WeldingTorchItem
+                && (WeldingTorchItem.isOn(mc.player.getMainHandItem()) || rightUseDown);
+        boolean cutting = held instanceof PlasmaCutterItem
+                && (PlasmaCutterItem.isOn(mc.player.getMainHandItem()) || rightUseDown);
         if (!welding && !cutting) {
             clientWeldTrace.clear();
             clientWeldAssembly = "";
             return;
         }
-        if (!(mc.hitResult instanceof BlockHitResult hit)) return;
-        var blocks = WeldGeometry.findAssembly(mc.level, hit.getBlockPos());
+        SubLevelRaycast.Hit subHit = SubLevelRaycast.trace(
+                mc.level, mc.player.getEyePosition(), mc.player.getLookAngle(), 6.0D,
+                state -> !state.isAir()
+        );
+
+        double vanillaDistance = mc.hitResult instanceof BlockHitResult hit
+                ? mc.player.getEyePosition().distanceTo(hit.getLocation()) : Double.MAX_VALUE;
+
+        SubLevel subLevel = null;
+        BlockPos targetPos = null;
+        BlockState targetState = null;
+        if (subHit != null && subHit.distance() <= vanillaDistance + 0.20D) {
+            subLevel = subHit.subLevel();
+            targetPos = subHit.localPos();
+            targetState = subHit.state();
+            if (!WeldGeometry.isEligible(targetState)) return;
+        } else if (mc.hitResult instanceof BlockHitResult hit) {
+            targetPos = hit.getBlockPos();
+            targetState = mc.level.getBlockState(targetPos);
+        }
+
+        if (targetPos == null) return;
+        var blocks = WeldGeometry.findAssembly(mc.level, subLevel, targetPos);
         if (blocks.isEmpty()) return;
 
-        String key = blocks.stream().mapToLong(BlockPos::asLong).min().orElse(0L) + ":" + welding;
+        String key = (subLevel == null ? "world" : subLevel.getUniqueId().toString()) + ":"
+                + blocks.stream().mapToLong(BlockPos::asLong).min().orElse(0L) + ":" + welding;
         if (!key.equals(clientWeldAssembly)) {
             clientWeldAssembly = key;
             clientWeldTrace.clear();
         }
 
-        AABB box = WeldGeometry.bounds(mc.level, blocks);
-        Vec3[][] edges = WeldGeometry.visibleFaceEdges(box, mc.player.getEyePosition());
-        Vec3 eye = mc.player.getEyePosition();
-        Vec3 rayEnd = eye.add(mc.player.getLookAngle().scale(6.0D));
-        boolean tracing = mc.options.keyUse.isDown();
+        Vec3 eye = subLevel == null ? mc.player.getEyePosition()
+                : subLevel.logicalPose().transformPositionInverse(mc.player.getEyePosition());
+        AABB box = WeldGeometry.bounds(mc.level, subLevel, blocks);
+        Vec3[][] localEdges = WeldGeometry.visibleFaceEdges(box, eye);
+        Vec3 rayEnd = subLevel == null
+                ? eye.add(mc.player.getLookAngle().scale(6.0D))
+                : subLevel.logicalPose().transformPositionInverse(
+                        mc.player.getEyePosition().add(mc.player.getLookAngle().scale(6.0D)));
+
+        boolean tracing = rightUseDown;
         final int samples = 12;
-        com.mojang.blaze3d.systems.RenderSystem.lineWidth(3.0F);
-        for (int edge = 0; edge < edges.length; edge++) {
-            Vec3 a = edges[edge][0], b = edges[edge][1];
+        com.mojang.blaze3d.systems.RenderSystem.lineWidth(4.0F);
+        for (int edge = 0; edge < localEdges.length; edge++) {
+            Vec3 a = localEdges[edge][0], b = localEdges[edge][1];
             for (int sample = 0; sample < samples; sample++) {
                 double t0 = (double) sample / samples;
                 double t1 = (double) (sample + 1) / samples;
                 Vec3 p0 = a.lerp(b, t0);
                 Vec3 p1 = a.lerp(b, t1);
                 Vec3 mid = p0.lerp(p1, 0.5);
-                if (tracing && distanceToSegmentSqr(mid, eye, rayEnd) <= 0.30D * 0.30D) {
+                if (tracing && distanceToSegmentSqr(mid, eye, rayEnd) <= 0.40D * 0.40D) {
                     clientWeldTrace.set(edge * samples + sample);
                 }
                 int color = clientWeldTrace.get(edge * samples + sample)
                         ? (welding ? 0xFF35E66B : 0xFFFF8B35) : 0xF0FFFFFF;
+                Vec3 worldP0 = subLevel == null ? p0 : subLevel.logicalPose().transformPosition(p0);
+                Vec3 worldP1 = subLevel == null ? p1 : subLevel.logicalPose().transformPosition(p1);
                 VertexConsumer lines = buffer.getBuffer(RenderType.lines());
                 Matrix4f matrix = poseStack.last().pose();
-                lines.addVertex(matrix, (float)(p0.x-camera.x), (float)(p0.y-camera.y), (float)(p0.z-camera.z))
+                lines.addVertex(matrix, (float)(worldP0.x-camera.x), (float)(worldP0.y-camera.y), (float)(worldP0.z-camera.z))
                         .setColor((color >> 16) & 255, (color >> 8) & 255, color & 255, (color >>> 24) & 255).setNormal(0, 1, 0);
-                lines.addVertex(matrix, (float)(p1.x-camera.x), (float)(p1.y-camera.y), (float)(p1.z-camera.z))
+                lines.addVertex(matrix, (float)(worldP1.x-camera.x), (float)(worldP1.y-camera.y), (float)(worldP1.z-camera.z))
                         .setColor((color >> 16) & 255, (color >> 8) & 255, color & 255, (color >>> 24) & 255).setNormal(0, 1, 0);
             }
         }
@@ -252,42 +286,59 @@ public class ClientEvents {
         return point.distanceToSqr(start.add(segment.scale(t)));
     }
 
-    private static void renderCube(PoseStack poseStack, VertexConsumer vc) {
-        Matrix4f mat = poseStack.last().pose();
+    private static void renderBlockCrackOverlay(PoseStack poseStack, VertexConsumer vc,
+                                                BlockState state, Level level, BlockPos pos) {
+        Matrix4f matrix = poseStack.last().pose();
         PoseStack.Pose pose = poseStack.last();
-
-        int r = 255, g = 255, b = 255, a = 220;
         int light = LightTexture.FULL_BRIGHT;
+        int alpha = 220;
 
-        vc.addVertex(mat, 0, 0, 0).setColor(r, g, b, a).setUv(0, 1).setOverlay(OverlayTexture.NO_OVERLAY).setLight(light).setNormal(pose, 0, 0, -1);
-        vc.addVertex(mat, 1, 0, 0).setColor(r, g, b, a).setUv(1, 1).setOverlay(OverlayTexture.NO_OVERLAY).setLight(light).setNormal(pose, 0, 0, -1);
-        vc.addVertex(mat, 1, 1, 0).setColor(r, g, b, a).setUv(1, 0).setOverlay(OverlayTexture.NO_OVERLAY).setLight(light).setNormal(pose, 0, 0, -1);
-        vc.addVertex(mat, 0, 1, 0).setColor(r, g, b, a).setUv(0, 0).setOverlay(OverlayTexture.NO_OVERLAY).setLight(light).setNormal(pose, 0, 0, -1);
+        var shape = state.getShape(level, pos);
+        var boxes = shape.toAabbs();
+        if (boxes.isEmpty()) {
+            boxes = java.util.List.of(new AABB(0.0D, 0.0D, 0.0D, 1.0D, 1.0D, 1.0D));
+        }
 
-        vc.addVertex(mat, 1, 0, 1).setColor(r, g, b, a).setUv(0, 1).setOverlay(OverlayTexture.NO_OVERLAY).setLight(light).setNormal(pose, 0, 0, 1);
-        vc.addVertex(mat, 0, 0, 1).setColor(r, g, b, a).setUv(1, 1).setOverlay(OverlayTexture.NO_OVERLAY).setLight(light).setNormal(pose, 0, 0, 1);
-        vc.addVertex(mat, 0, 1, 1).setColor(r, g, b, a).setUv(1, 0).setOverlay(OverlayTexture.NO_OVERLAY).setLight(light).setNormal(pose, 0, 0, 1);
-        vc.addVertex(mat, 1, 1, 1).setColor(r, g, b, a).setUv(0, 0).setOverlay(OverlayTexture.NO_OVERLAY).setLight(light).setNormal(pose, 0, 0, 1);
+        for (AABB box : boxes) {
+            float x0 = (float) box.minX;
+            float y0 = (float) box.minY;
+            float z0 = (float) box.minZ;
+            float x1 = (float) box.maxX;
+            float y1 = (float) box.maxY;
+            float z1 = (float) box.maxZ;
 
-        vc.addVertex(mat, 0, 0, 1).setColor(r, g, b, a).setUv(0, 1).setOverlay(OverlayTexture.NO_OVERLAY).setLight(light).setNormal(pose, -1, 0, 0);
-        vc.addVertex(mat, 0, 0, 0).setColor(r, g, b, a).setUv(1, 1).setOverlay(OverlayTexture.NO_OVERLAY).setLight(light).setNormal(pose, -1, 0, 0);
-        vc.addVertex(mat, 0, 1, 0).setColor(r, g, b, a).setUv(1, 0).setOverlay(OverlayTexture.NO_OVERLAY).setLight(light).setNormal(pose, -1, 0, 0);
-        vc.addVertex(mat, 0, 1, 1).setColor(r, g, b, a).setUv(0, 0).setOverlay(OverlayTexture.NO_OVERLAY).setLight(light).setNormal(pose, -1, 0, 0);
+            addCrackQuad(vc, matrix, pose, light, alpha, x0, y0, z0, x1, y0, z0, x1, y1, z0, x0, y1, z0, 0, 0, -1);
+            addCrackQuad(vc, matrix, pose, light, alpha, x1, y0, z1, x0, y0, z1, x0, y1, z1, x1, y1, z1, 0, 0, 1);
+            addCrackQuad(vc, matrix, pose, light, alpha, x0, y0, z1, x0, y0, z0, x0, y1, z0, x0, y1, z1, -1, 0, 0);
+            addCrackQuad(vc, matrix, pose, light, alpha, x1, y0, z0, x1, y0, z1, x1, y1, z1, x1, y1, z0, 1, 0, 0);
+            addCrackQuad(vc, matrix, pose, light, alpha, x0, y0, z1, x1, y0, z1, x1, y0, z0, x0, y0, z0, 0, -1, 0);
+            addCrackQuad(vc, matrix, pose, light, alpha, x0, y1, z0, x1, y1, z0, x1, y1, z1, x0, y1, z1, 0, 1, 0);
+        }
+    }
 
-        vc.addVertex(mat, 1, 0, 0).setColor(r, g, b, a).setUv(0, 1).setOverlay(OverlayTexture.NO_OVERLAY).setLight(light).setNormal(pose, 1, 0, 0);
-        vc.addVertex(mat, 1, 0, 1).setColor(r, g, b, a).setUv(1, 1).setOverlay(OverlayTexture.NO_OVERLAY).setLight(light).setNormal(pose, 1, 0, 0);
-        vc.addVertex(mat, 1, 1, 1).setColor(r, g, b, a).setUv(1, 0).setOverlay(OverlayTexture.NO_OVERLAY).setLight(light).setNormal(pose, 1, 0, 0);
-        vc.addVertex(mat, 1, 1, 0).setColor(r, g, b, a).setUv(0, 0).setOverlay(OverlayTexture.NO_OVERLAY).setLight(light).setNormal(pose, 1, 0, 0);
+    private static void addCrackQuad(VertexConsumer vc, Matrix4f matrix, PoseStack.Pose pose,
+                                     int light, int alpha,
+                                     float x0, float y0, float z0,
+                                     float x1, float y1, float z1,
+                                     float x2, float y2, float z2,
+                                     float x3, float y3, float z3,
+                                     float nx, float ny, float nz) {
+        float offsetX = nx * 0.002F;
+        float offsetY = ny * 0.002F;
+        float offsetZ = nz * 0.002F;
+        x0 += offsetX; y0 += offsetY; z0 += offsetZ;
+        x1 += offsetX; y1 += offsetY; z1 += offsetZ;
+        x2 += offsetX; y2 += offsetY; z2 += offsetZ;
+        x3 += offsetX; y3 += offsetY; z3 += offsetZ;
 
-        vc.addVertex(mat, 0, 0, 0).setColor(r, g, b, a).setUv(0, 0).setOverlay(OverlayTexture.NO_OVERLAY).setLight(light).setNormal(pose, 0, -1, 0);
-        vc.addVertex(mat, 1, 0, 0).setColor(r, g, b, a).setUv(1, 0).setOverlay(OverlayTexture.NO_OVERLAY).setLight(light).setNormal(pose, 0, -1, 0);
-        vc.addVertex(mat, 1, 0, 1).setColor(r, g, b, a).setUv(1, 1).setOverlay(OverlayTexture.NO_OVERLAY).setLight(light).setNormal(pose, 0, -1, 0);
-        vc.addVertex(mat, 0, 0, 1).setColor(r, g, b, a).setUv(0, 1).setOverlay(OverlayTexture.NO_OVERLAY).setLight(light).setNormal(pose, 0, -1, 0);
-
-        vc.addVertex(mat, 0, 1, 1).setColor(r, g, b, a).setUv(0, 1).setOverlay(OverlayTexture.NO_OVERLAY).setLight(light).setNormal(pose, 0, 1, 0);
-        vc.addVertex(mat, 1, 1, 1).setColor(r, g, b, a).setUv(1, 1).setOverlay(OverlayTexture.NO_OVERLAY).setLight(light).setNormal(pose, 0, 1, 0);
-        vc.addVertex(mat, 1, 1, 0).setColor(r, g, b, a).setUv(1, 0).setOverlay(OverlayTexture.NO_OVERLAY).setLight(light).setNormal(pose, 0, 1, 0);
-        vc.addVertex(mat, 0, 1, 0).setColor(r, g, b, a).setUv(0, 0).setOverlay(OverlayTexture.NO_OVERLAY).setLight(light).setNormal(pose, 0, 1, 0);
+        vc.addVertex(matrix, x0, y0, z0).setColor(255, 255, 255, alpha).setUv(0, 1)
+                .setOverlay(OverlayTexture.NO_OVERLAY).setLight(light).setNormal(pose, nx, ny, nz);
+        vc.addVertex(matrix, x1, y1, z1).setColor(255, 255, 255, alpha).setUv(1, 1)
+                .setOverlay(OverlayTexture.NO_OVERLAY).setLight(light).setNormal(pose, nx, ny, nz);
+        vc.addVertex(matrix, x2, y2, z2).setColor(255, 255, 255, alpha).setUv(1, 0)
+                .setOverlay(OverlayTexture.NO_OVERLAY).setLight(light).setNormal(pose, nx, ny, nz);
+        vc.addVertex(matrix, x3, y3, z3).setColor(255, 255, 255, alpha).setUv(0, 0)
+                .setOverlay(OverlayTexture.NO_OVERLAY).setLight(light).setNormal(pose, nx, ny, nz);
     }
 
     private static SubLevel getSubLevel(Level level, UUID id) {

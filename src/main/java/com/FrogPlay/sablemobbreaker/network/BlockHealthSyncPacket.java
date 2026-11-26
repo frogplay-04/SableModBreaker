@@ -48,6 +48,10 @@ public record BlockHealthSyncPacket(UUID subLevelId, int x, int y, int z, int hp
                 }
 
                 ClientEvents.markDirty();
+                if (packet.hp() <= 0) {
+                    ClientEvents.markSubLevelBlockDirty(
+                            packet.subLevelId(), packet.x(), packet.y(), packet.z());
+                }
             } catch (Throwable t) {
                 SableMobBreaker.LOGGER.warn("[SMB][CLIENT] handle error: {}", t.toString());
             }

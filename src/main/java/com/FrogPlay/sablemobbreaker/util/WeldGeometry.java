@@ -6,6 +6,10 @@ import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.DoorBlock;
 import net.minecraft.world.level.block.TrapDoorBlock;
 import net.minecraft.world.level.block.state.BlockState;
+import dev.ryanhcode.sable.api.sublevel.SubLevelContainer;
+import dev.ryanhcode.sable.sublevel.SubLevel;
+import net.minecraft.world.level.ChunkPos;
+import net.minecraft.world.level.chunk.LevelChunk;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 import net.minecraft.world.phys.shapes.VoxelShape;
@@ -19,6 +23,7 @@ public final class WeldGeometry {
     private WeldGeometry() {}
 
     public static boolean isEligible(BlockState state) {
+        if (state == null) return false;
         if (state.getBlock() instanceof DoorBlock) {
             return !state.is(BlockTags.WOODEN_DOORS);
         }
@@ -29,8 +34,12 @@ public final class WeldGeometry {
     }
 
     public static Set<BlockPos> findAssembly(Level level, BlockPos start) {
+        return findAssembly(level, null, start);
+    }
+
+    public static Set<BlockPos> findAssembly(Level level, SubLevel subLevel, BlockPos start) {
         BlockPos origin = start.immutable();
-        BlockState first = level.getBlockState(origin);
+        BlockState first = getBlockState(level, subLevel, origin);
         if (!isEligible(first)) return Set.of();
 
         Set<BlockPos> found = new LinkedHashSet<>();
@@ -42,13 +51,24 @@ public final class WeldGeometry {
             for (BlockPos direction : DIRECTIONS) {
                 BlockPos next = pos.offset(direction);
                 if (found.contains(next)) continue;
-                BlockState candidate = level.getBlockState(next);
+                BlockState candidate = getBlockState(level, subLevel, next);
                 if (candidate.getBlock() == first.getBlock() && isEligible(candidate)) {
                     queue.addLast(next.immutable());
                 }
             }
         }
         return Set.copyOf(found);
+    }
+
+    public static BlockState getBlockState(Level level, SubLevel subLevel, BlockPos pos) {
+        if (subLevel == null) return level.getBlockState(pos);
+        SubLevelContainer container = SubLevelContainer.getContainer(level);
+        if (container == null) return net.minecraft.world.level.block.Blocks.AIR.defaultBlockState();
+        ChunkPos chunkPos = new ChunkPos(pos.getX() >> 4, pos.getZ() >> 4);
+        if (!container.inBounds(chunkPos)) return net.minecraft.world.level.block.Blocks.AIR.defaultBlockState();
+        LevelChunk chunk = container.getChunk(chunkPos);
+        return chunk == null ? net.minecraft.world.level.block.Blocks.AIR.defaultBlockState()
+                : chunk.getBlockState(pos);
     }
 
     private static final BlockPos[] DIRECTIONS = {
@@ -80,9 +100,13 @@ public final class WeldGeometry {
     }
 
     public static AABB bounds(Level level, Set<BlockPos> blocks) {
+        return bounds(level, null, blocks);
+    }
+
+    public static AABB bounds(Level level, SubLevel subLevel, Set<BlockPos> blocks) {
         AABB result = null;
         for (BlockPos pos : blocks) {
-            BlockState state = level.getBlockState(pos);
+            BlockState state = getBlockState(level, subLevel, pos);
             VoxelShape shape = state.getShape(level, pos, CollisionContext.empty());
             for (AABB local : shape.toAabbs()) {
                 AABB world = local.move(pos);
