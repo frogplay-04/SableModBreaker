@@ -6,14 +6,15 @@
   "mixins": [
     "CrackUtilMixin",
     "CompartmentTrackerMixin",
-    "client.SableBlockUpdateMixin",
-    "client.ClientLevelSetBlockMixin",
     "LevelAabbMixin",
     "DoorBlockMixin",
-    "TrapDoorBlockMixin",
+    "TrapDoorBlockMixin"
+  ],
+  "client": [
+    "client.SableBlockUpdateMixin",
+    "client.ClientLevelSetBlockMixin",
     "client.ClientChunkLoadMixin"
   ],
-  "client": [],
   "injectors": {
     "defaultRequire": 0
   }
