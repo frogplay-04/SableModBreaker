@@ -69,7 +69,7 @@ jobs:
           }
 
           $latestLog = Get-ChildItem -Path $env:GITHUB_WORKSPACE -Filter latest.log -Recurse -File -ErrorAction SilentlyContinue |
-            Where-Object { $_.FullName -match '[\\\\/]run[\\\\/]logs[\\\\/]latest\.log$' } |
+            Where-Object { $_.FullName -like '*\run\logs\latest.log' -or $_.FullName -like '*/run/logs/latest.log' } |
             Sort-Object LastWriteTime -Descending |
             Select-Object -First 1
 
