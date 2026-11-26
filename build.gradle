@@ -73,12 +73,10 @@ neoForge {
             programArguments.addAll '--nogui'
             systemProperties.put 'neoforge.enabledGameTestNamespaces', project.mod_id
         }
-        // The tests use Minecraft's built-in "empty" structure template.
-        // Include minecraft here so RegisterGameTestsEvent does not filter
-        // out methods whose templateNamespace is "minecraft".
+        // GameTests use the mod-owned empty structure template.
         gameTestServer {
             type = "gameTestServer"
-            systemProperties.put 'neoforge.enabledGameTestNamespaces', "${project.mod_id},minecraft"
+            systemProperties.put 'neoforge.enabledGameTestNamespaces', project.mod_id
         }
         data {
             data()
