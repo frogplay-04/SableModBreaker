@@ -3,8 +3,6 @@ name: Windows Minecraft Test
 on:
   push:
     branches: [main]
-  pull_request:
-    branches: [main]
   workflow_dispatch:
 
 permissions:
@@ -16,7 +14,7 @@ concurrency:
 
 jobs:
   build-and-launch:
-    # Automated server GameTests run on every main push / PR. The interactive
+    # Trusted pushes run server-side tests automatically. The interactive
     # client smoke test remains manual so normal commits do not open a window.
     runs-on: [self-hosted, Windows, X64]
     timeout-minutes: 25
@@ -40,7 +38,7 @@ jobs:
       - name: Build mod
         id: build
         shell: powershell -NoProfile -ExecutionPolicy Bypass -Command "& '{0}'"
-        run: .\\gradlew.bat build --no-daemon
+        run: .\gradlew.bat build --no-daemon
 
       - name: Run server-side GameTests
         id: gametests
@@ -48,7 +46,7 @@ jobs:
         timeout-minutes: 8
         run: |
           Write-Host "Running NeoForge GameTests for sablemobbreaker..."
-          .\\gradlew.bat runGameTestServer --no-daemon --stacktrace
+          .\gradlew.bat runGameTestServer --no-daemon --stacktrace
           if ($LASTEXITCODE -ne 0) {
             Write-Error "NeoForge GameTests failed. See run/logs/latest.log in the uploaded artifact."
             exit $LASTEXITCODE
@@ -71,7 +69,7 @@ jobs:
           }
 
           $latestLog = Get-ChildItem -Path $env:GITHUB_WORKSPACE -Filter latest.log -Recurse -File -ErrorAction SilentlyContinue |
-            Where-Object { $_.FullName -match '[\\\\/]run[\\\\/]logs[\\\\/]latest\\.log$' } |
+            Where-Object { $_.FullName -match '[\\\\/]run[\\\\/]logs[\\\\/]latest\.log$' } |
             Sort-Object LastWriteTime -Descending |
             Select-Object -First 1
 
@@ -81,7 +79,7 @@ jobs:
           }
 
           $logText = Get-Content -Path $latestLog.FullName -Raw
-          if ($logText -notmatch 'Done \\(') {
+          if ($logText -notmatch 'Done \(') {
             Write-Host "Minecraft did not reach the normal 'Done' startup marker."
             Get-Content -Path $latestLog.FullName -Tail 100
             exit 1
@@ -94,10 +92,10 @@ jobs:
         if: always()
         shell: powershell -NoProfile -ExecutionPolicy Bypass -Command "& '{0}'"
         env:
-          BUILD_RESULT: ${{ steps.build.outcome }}
-          GAMETEST_RESULT: ${{ steps.gametests.outcome }}
-          CLIENT_RESULT: ${{ steps.client.outcome }}
-          EVENT_NAME: ${{ github.event_name }}
+          BUILD_RESULT: \${{ steps.build.outcome }}
+          GAMETEST_RESULT: \${{ steps.gametests.outcome }}
+          CLIENT_RESULT: \${{ steps.client.outcome }}
+          EVENT_NAME: \${{ github.event_name }}
         run: |
           $client = if ($env:EVENT_NAME -eq 'workflow_dispatch') { $env:CLIENT_RESULT } else { 'not-run (automatic server-only mode)' }
           $lines = @(
@@ -118,7 +116,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: sablemobbreaker-autotest-${{ github.run_number }}
+          name: sablemobbreaker-autotest-\${{ github.run_number }}
           if-no-files-found: warn
           retention-days: 14
           path: |
