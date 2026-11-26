@@ -2,7 +2,7 @@
 
 ## What runs automatically
 
-The Windows Minecraft Test workflow runs on every push to `main`, every pull request targeting `main`, and on manual dispatch.
+The Windows Minecraft Test workflow runs on every push to `main` and on manual dispatch. Pull requests still receive the regular Ubuntu build workflow; server GameTests run after trusted code is merged to `main`.
 
 1. Compile and package the mod with Java 21 / NeoForge 21.1.250.
 2. Run the dedicated NeoForge GameTest server.
