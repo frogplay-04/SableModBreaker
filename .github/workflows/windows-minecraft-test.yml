@@ -74,7 +74,8 @@ jobs:
             'weldingTorchBottleDataPersists',
             'plasmaCutterBottleDataPersists'
           )
-          $missing = @($testNames | Where-Object { $gameTestLog -notmatch [regex]::Escape($_) })
+          $normalizedLog = $gameTestLog.ToLowerInvariant()
+          $missing = @($testNames | Where-Object { $normalizedLog -notmatch [regex]::Escape($_.ToLowerInvariant()) })
           if ($missing.Count -gt 0) {
             Write-Error "GameTest process exited successfully but expected test names are missing: $($missing -join ', '). Invalid/empty test run."
             Get-Content -Path $latestLog -Tail 120
