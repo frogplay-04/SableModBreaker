@@ -28,7 +28,7 @@ public final class BlockHealthGameTests {
         event.register(BlockHealthGameTests.class);
     }
 
-    @GameTest(template = "empty", templateNamespace = "minecraft")
+    @GameTest(template = "empty", templateNamespace = "sablemobbreaker")
     public static void blockHealthDamageAndReset(GameTestHelper helper) {
         UUID subLevelId = UUID.randomUUID();
         BlockPos pos = new BlockPos(2, 3, 4);
@@ -58,7 +58,7 @@ public final class BlockHealthGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty", templateNamespace = "minecraft")
+    @GameTest(template = "empty", templateNamespace = "sablemobbreaker")
     public static void destroyedBlockDataIsRetained(GameTestHelper helper) {
         UUID subLevelId = UUID.randomUUID();
         BlockPos pos = new BlockPos(1, 2, 3);
@@ -88,7 +88,7 @@ public final class BlockHealthGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty", templateNamespace = "minecraft")
+    @GameTest(template = "empty", templateNamespace = "sablemobbreaker")
     public static void blockHealthIsIsolatedBetweenSubLevels(GameTestHelper helper) {
         UUID firstSubLevel = UUID.randomUUID();
         UUID secondSubLevel = UUID.randomUUID();
@@ -111,7 +111,7 @@ public final class BlockHealthGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty", templateNamespace = "minecraft")
+    @GameTest(template = "empty", templateNamespace = "sablemobbreaker")
     public static void deadBlockTrackingAndHpClamping(GameTestHelper helper) {
         UUID subLevelId = UUID.randomUUID();
         BlockPos pos = new BlockPos(7, 2, 5);
@@ -134,7 +134,7 @@ public final class BlockHealthGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty", templateNamespace = "minecraft")
+    @GameTest(template = "empty", templateNamespace = "sablemobbreaker")
     public static void oxygenTankAirIsClamped(GameTestHelper helper) {
         ItemStack tank = new ItemStack(SableMobBreaker.OXYGEN_TANK.get());
 
@@ -154,7 +154,7 @@ public final class BlockHealthGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty", templateNamespace = "minecraft")
+    @GameTest(template = "empty", templateNamespace = "sablemobbreaker")
     public static void plasmaCutterSwitchStatePersistsInItemData(GameTestHelper helper) {
         ItemStack cutter = new ItemStack(SableMobBreaker.PLASMA_CUTTER.get());
 
@@ -168,7 +168,7 @@ public final class BlockHealthGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty", templateNamespace = "minecraft")
+    @GameTest(template = "empty", templateNamespace = "sablemobbreaker")
     public static void weldingTorchBottleDataPersists(GameTestHelper helper) {
         ItemStack torch = new ItemStack(SableMobBreaker.WELDING_TORCH.get());
         ItemStack tank = new ItemStack(SableMobBreaker.OXYGEN_TANK.get());
@@ -184,7 +184,7 @@ public final class BlockHealthGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty", templateNamespace = "minecraft")
+    @GameTest(template = "empty", templateNamespace = "sablemobbreaker")
     public static void plasmaCutterBottleDataPersists(GameTestHelper helper) {
         ItemStack cutter = new ItemStack(SableMobBreaker.PLASMA_CUTTER.get());
         ItemStack tank = new ItemStack(SableMobBreaker.OXYGEN_TANK.get());
