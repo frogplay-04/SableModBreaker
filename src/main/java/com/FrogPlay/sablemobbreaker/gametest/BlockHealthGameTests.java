@@ -8,7 +8,6 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.block.Blocks;
-import net.neoforged.neoforge.gametest.GameTestHolder;
 import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
 import net.minecraft.gametest.framework.GameTest;
 import net.minecraft.gametest.framework.GameTestHelper;
@@ -20,10 +19,14 @@ import java.util.UUID;
  * These tests exercise server-side logic; they do not simulate mouse input or
  * render the client UI.
  */
-@GameTestHolder(SableMobBreaker.MOD_ID)
 @PrefixGameTestTemplate(false)
 public final class BlockHealthGameTests {
     private BlockHealthGameTests() {}
+
+    /** Explicitly register the test class on the mod event bus. */
+    public static void registerTests(net.neoforged.neoforge.event.RegisterGameTestsEvent event) {
+        event.register(BlockHealthGameTests.class);
+    }
 
     @GameTest(template = "empty", templateNamespace = "minecraft")
     public static void blockHealthDamageAndReset(GameTestHelper helper) {
