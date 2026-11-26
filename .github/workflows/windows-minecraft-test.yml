@@ -92,10 +92,10 @@ jobs:
         if: always()
         shell: powershell -NoProfile -ExecutionPolicy Bypass -Command "& '{0}'"
         env:
-          BUILD_RESULT: \${{ steps.build.outcome }}
-          GAMETEST_RESULT: \${{ steps.gametests.outcome }}
-          CLIENT_RESULT: \${{ steps.client.outcome }}
-          EVENT_NAME: \${{ github.event_name }}
+          BUILD_RESULT: ${{ steps.build.outcome }}
+          GAMETEST_RESULT: ${{ steps.gametests.outcome }}
+          CLIENT_RESULT: ${{ steps.client.outcome }}
+          EVENT_NAME: ${{ github.event_name }}
         run: |
           $client = if ($env:EVENT_NAME -eq 'workflow_dispatch') { $env:CLIENT_RESULT } else { 'not-run (automatic server-only mode)' }
           $lines = @(
@@ -116,7 +116,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: sablemobbreaker-autotest-\${{ github.run_number }}
+          name: sablemobbreaker-autotest-${{ github.run_number }}
           if-no-files-found: warn
           retention-days: 14
           path: |
