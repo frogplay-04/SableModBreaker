@@ -13,10 +13,8 @@ concurrency:
 
 jobs:
   build-and-launch:
-    # Trusted pushes run server-side tests automatically. The interactive
-    # client smoke test remains manual so normal commits do not open a window.
     runs-on: [self-hosted, Windows, X64]
-    timeout-minutes: 25
+    timeout-minutes: 30
 
     steps:
       - name: Checkout repository
@@ -42,50 +40,109 @@ jobs:
       - name: Run server-side GameTests
         id: gametests
         shell: powershell -NoProfile -ExecutionPolicy Bypass -Command "& '{0}'"
-        timeout-minutes: 8
+        timeout-minutes: 10
         run: |
           Write-Host "Running NeoForge GameTests for sablemobbreaker..."
           .\gradlew.bat runGameTestServer --no-daemon --stacktrace
-          if ($LASTEXITCODE -ne 0) {
-            Write-Error "NeoForge GameTests failed. See run/logs/latest.log in the uploaded artifact."
-            exit $LASTEXITCODE
+          $gameTestExit = $LASTEXITCODE
+          $latestLog = Join-Path $env:GITHUB_WORKSPACE 'run\logs\latest.log'
+
+          if (-not (Test-Path $latestLog)) {
+            Write-Error "GameTest log was not created."
+            exit 1
           }
-          Write-Host "SUCCESS: NeoForge GameTest server exited with code 0."
+
+          $gameTestLog = Get-Content -Path $latestLog -Raw
+          if ($gameTestLog -match 'No test functions were given') {
+            Write-Error "GameTest server started with ZERO registered test functions. This is not a passing test run."
+            Get-Content -Path $latestLog -Tail 100
+            exit 1
+          }
+          if ($gameTestExit -ne 0) {
+            Write-Error "NeoForge GameTests failed with exit code $gameTestExit."
+            Get-Content -Path $latestLog -Tail 120
+            exit $gameTestExit
+          }
+
+          $testNames = @(
+            'blockHealthDamageAndReset',
+            'destroyedBlockDataIsRetained',
+            'blockHealthIsIsolatedBetweenSubLevels',
+            'deadBlockTrackingAndHpClamping',
+            'oxygenTankAirIsClamped',
+            'plasmaCutterSwitchStatePersistsInItemData',
+            'weldingTorchBottleDataPersists',
+            'plasmaCutterBottleDataPersists'
+          )
+          $normalizedLog = $gameTestLog.ToLowerInvariant()
+          $missing = @($testNames | Where-Object { $normalizedLog -notmatch [regex]::Escape($_.ToLowerInvariant()) })
+          if ($missing.Count -gt 0) {
+            Write-Error "GameTest process exited successfully but expected test names are missing: $($missing -join ', '). Invalid/empty test run."
+            Get-Content -Path $latestLog -Tail 120
+            exit 1
+          }
+          Write-Host "SUCCESS: GameTest server exited cleanly and all eight expected test names were found."
 
       - name: Launch Minecraft client and check startup
         if: github.event_name == 'workflow_dispatch'
         id: client
         shell: powershell -NoProfile -ExecutionPolicy Bypass -Command "& '{0}'"
-        timeout-minutes: 6
+        timeout-minutes: 12
         run: |
+          $logPath = Join-Path $env:GITHUB_WORKSPACE 'run\logs\latest.log'
+          $crashDir = Join-Path $env:GITHUB_WORKSPACE 'run\crash-reports'
           $clientProcess = Start-Process -FilePath $env:ComSpec -ArgumentList @('/c', 'gradlew.bat runClient --no-daemon') -WorkingDirectory $env:GITHUB_WORKSPACE -PassThru
-          $finished = $clientProcess.WaitForExit(240000)
+          $deadline = (Get-Date).AddMinutes(8)
+          $reachedDone = $false
 
-          if (-not $finished) {
-            Write-Host "Client is still running after 4 minutes; stopping it so the runner is freed."
+          Write-Host "Started runClient wrapper PID $($clientProcess.Id). Waiting up to 8 minutes for the Done marker."
+          while ((Get-Date) -lt $deadline) {
+            Start-Sleep -Seconds 5
+            $clientProcess.Refresh()
+            if (Test-Path $logPath) {
+              $currentLog = Get-Content -Path $logPath -Raw -ErrorAction SilentlyContinue
+              if ($currentLog -match 'Done \(') {
+                $reachedDone = $true
+                Write-Host "SUCCESS: Minecraft reached the normal startup marker Done (."
+                break
+              }
+            }
+            if ($clientProcess.HasExited) {
+              Write-Host "Gradle wrapper exited before Minecraft reached Done. Exit code: $($clientProcess.ExitCode)"
+              break
+            }
+          }
+
+          if (-not $reachedDone) {
+            Write-Host "CLIENT_STARTUP_TIMEOUT_OR_EARLY_EXIT (not automatically classified as a JVM crash)"
+            if (Test-Path $logPath) { Get-Content -Path $logPath -Tail 160 }
+            if (Test-Path $crashDir) { Get-ChildItem -Path $crashDir -File | ForEach-Object { Write-Host "Crash report: $($_.FullName)" } }
+            $jcmd = Join-Path $env:JAVA_HOME 'bin\jcmd.exe'
+            if (Test-Path $jcmd) {
+              $diag = Join-Path $env:GITHUB_WORKSPACE 'run\client-jvm-diagnostics.txt'
+              & $jcmd -l 2>&1 | Out-File -FilePath $diag -Encoding utf8
+              Get-Content $diag
+              $javaIds = @(& $jcmd -l 2>$null | ForEach-Object { if ($_ -match '^([0-9]+)\s') { $Matches[1] } })
+              foreach ($javaId in $javaIds) {
+                $dump = Join-Path $env:GITHUB_WORKSPACE "run\client-thread-dump-$javaId.txt"
+                & $jcmd $javaId Thread.print 2>&1 | Out-File -FilePath $dump -Encoding utf8
+              }
+            }
+            if (-not $clientProcess.HasExited) {
+              Write-Host "Stopping the timed-out test process tree after diagnostics."
+              & taskkill.exe /PID $clientProcess.Id /T /F | Out-Null
+            }
+            exit 1
+          }
+
+          # Only terminate the client after startup has been positively verified.
+          Start-Sleep -Seconds 10
+          $clientProcess.Refresh()
+          if (-not $clientProcess.HasExited) {
+            Write-Host "Stopping the already-verified client process tree as workflow cleanup."
             & taskkill.exe /PID $clientProcess.Id /T /F | Out-Null
-            Start-Sleep -Seconds 3
           }
-
-          $latestLog = Get-ChildItem -Path $env:GITHUB_WORKSPACE -Filter latest.log -Recurse -File -ErrorAction SilentlyContinue |
-            Where-Object { $_.FullName -like '*\run\logs\latest.log' -or $_.FullName -like '*/run/logs/latest.log' } |
-            Sort-Object LastWriteTime -Descending |
-            Select-Object -First 1
-
-          if (-not $latestLog) {
-            Write-Error "Minecraft latest.log was not created. Check the uploaded Gradle output and crash reports."
-            exit 1
-          }
-
-          $logText = Get-Content -Path $latestLog.FullName -Raw
-          if ($logText -notmatch 'Done \(') {
-            Write-Host "Minecraft did not reach the normal 'Done' startup marker."
-            Get-Content -Path $latestLog.FullName -Tail 100
-            exit 1
-          }
-
-          Write-Host "SUCCESS: Minecraft reached the 'Done' startup marker."
-          Write-Host "Log: $($latestLog.FullName)"
+          Write-Host "Client startup smoke test passed."
 
       - name: Create AutoTester report
         if: always()
@@ -105,13 +162,14 @@ jobs:
             "- Server GameTests: $env:GAMETEST_RESULT",
             "- Client startup smoke test: $client",
             '',
-            'Server GameTests cover block HP, destroyed-block data retention, sublevel isolation, dead-block tracking, oxygen capacity and tool item data.',
-            'Client input, visual rendering and in-world interaction still require dedicated client-side tests or a manual smoke test.'
+            'A GameTest run is accepted only when all eight expected test names appear in latest.log and the task exits with code zero.',
+            'The client smoke test waits up to eight minutes for the Done marker. A timeout is not labelled as a confirmed JVM crash.',
+            'Client input, visual rendering and full in-world interaction still require dedicated client-side tests or a manual gameplay checklist.'
           )
           $lines | Set-Content -Path 'autotest-report.md' -Encoding UTF8
           $lines | Add-Content -Path $env:GITHUB_STEP_SUMMARY -Encoding UTF8
 
-      - name: Upload build, logs, crash reports and AutoTester report
+      - name: Upload build, logs, crash reports, JVM diagnostics and AutoTester report
         if: always()
         uses: actions/upload-artifact@v4
         with:
@@ -122,5 +180,6 @@ jobs:
             build/libs/*.jar
             run/logs/**
             run/crash-reports/**
+            run/client-*.txt
             hs_err_pid*.log
             autotest-report.md

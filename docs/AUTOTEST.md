@@ -1,25 +1,24 @@
 # SableMobBreaker AutoTester
 
-## What runs automatically
+## Automatic checks
 
-The Windows Minecraft Test workflow runs on every trusted branch push and on manual dispatch. Pull requests from branches in this repository are therefore tested when their commits are pushed. Fork pull requests do not execute code on the self-hosted Windows runner; they still receive the regular Ubuntu build workflow.
+The Windows workflow runs on pushes and manual dispatch using the self-hosted Windows x64 runner.
 
-1. Compile and package the mod with Java 21 / NeoForge 21.1.250.
+1. Build the mod with Java 21 and NeoForge 21.1.250.
 2. Run the dedicated NeoForge GameTest server.
-3. Save the build, Minecraft logs, crash reports, and a Markdown test summary as a GitHub Actions artifact.
+3. Reject an empty test registry and verify all eight expected GameTest method names appear in the server log.
+4. Upload build output, logs, crash reports, JVM diagnostics, and a Markdown summary.
 
-The workflow uses the repository's self-hosted Windows x64 runner. The runner must be online (the Actions runner process must be listening) for automatic jobs to start.
+GameTests are explicitly registered through `RegisterGameTestsEvent`. The dedicated GameTest run disables Gradle's forced process exit so the workflow can collect the real result.
 
 ## Manual client smoke test
 
-Use **Actions → Windows Minecraft Test → Run workflow** to additionally launch the Minecraft client and verify that it reaches the normal `Done (` startup marker. The client is stopped after the startup window so the runner is released.
+Use **Actions → Windows Minecraft Test → Run workflow** to launch the Minecraft client. The workflow waits up to eight minutes for the normal `Done (` startup marker. When it appears, startup is marked successful and the test process is stopped as cleanup. If it does not appear, the workflow reports a timeout or early exit, captures logs and JVM thread diagnostics where possible, and only then stops the process. A forced cleanup is not reported as proof of a Minecraft crash.
 
-## Current automated coverage
+## Current server-side coverage
 
-Server-side GameTests currently cover:
-
-- block HP initialization, exact 5 HP damage, persistence in the manager, and reset;
-- saved destroyed-block state and block-entity NBT payload;
+- block HP initialization, exact 5 HP damage, manager persistence, and reset;
+- destroyed-block state and block-entity NBT retention;
 - HP isolation between sublevels;
 - dead-block tracking, HP clamping, and air having zero HP;
 - oxygen tank capacity clamping;
@@ -28,4 +27,4 @@ Server-side GameTests currently cover:
 
 ## Known coverage limits
 
-A successful build is not proof that all gameplay works. Server GameTests do not simulate real mouse/keyboard input, client rendering, GUI layout, animation, or the full Sable sublevel ray-tracing interaction. The manual client workflow currently checks startup only. Those areas need client-side automation and/or a human gameplay checklist before the project can claim full end-to-end coverage.
+Server GameTests do not simulate real mouse/keyboard input, client rendering, GUI layout, animation, or full Sable sublevel ray-tracing interactions. The manual client workflow checks startup only. Those areas still need client-side automation and/or a human gameplay checklist.
