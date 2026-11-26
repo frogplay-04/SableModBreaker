@@ -73,10 +73,12 @@ neoForge {
             programArguments.addAll '--nogui'
             systemProperties.put 'neoforge.enabledGameTestNamespaces', project.mod_id
         }
-        // Dedicated NeoForge GameTest server; this creates the runGameTestServer task.
+        // The tests use Minecraft's built-in "empty" structure template.
+        // Include minecraft here so RegisterGameTestsEvent does not filter
+        // out methods whose templateNamespace is "minecraft".
         gameTestServer {
             type = "gameTestServer"
-            systemProperties.put 'neoforge.enabledGameTestNamespaces', project.mod_id
+            systemProperties.put 'neoforge.enabledGameTestNamespaces', "${project.mod_id},minecraft"
         }
         data {
             data()
@@ -122,9 +124,9 @@ tasks.named('processResources', ProcessResources).configure {
             neo_version            : neo_version,
             loader_version_range   : loader_version_range,
             mod_id                 : mod_id,
-            mod_name               : mod_name,
+            mod_name                : mod_name,
             mod_license            : mod_license,
-            mod_version            : mod_version,
+            mod_version             : mod_version,
             mod_authors             : mod_authors,
             mod_description        : mod_description,
     ]
