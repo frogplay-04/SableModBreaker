@@ -64,24 +64,20 @@ jobs:
             exit $gameTestExit
           }
 
-          $testNames = @(
-            'blockHealthDamageAndReset',
-            'destroyedBlockDataIsRetained',
-            'blockHealthIsIsolatedBetweenSubLevels',
-            'deadBlockTrackingAndHpClamping',
-            'oxygenTankAirIsClamped',
-            'plasmaCutterSwitchStatePersistsInItemData',
-            'weldingTorchBottleDataPersists',
-            'plasmaCutterBottleDataPersists'
-          )
-          $normalizedLog = $gameTestLog.ToLowerInvariant()
-          $missing = @($testNames | Where-Object { $normalizedLog -notmatch [regex]::Escape($_.ToLowerInvariant()) })
-          if ($missing.Count -gt 0) {
-            Write-Error "GameTest process exited successfully but expected test names are missing: $($missing -join ', '). Invalid/empty test run."
+          # Minecraft 1.21.1 prints a batch summary rather than individual
+          # method names. Validate the registered count and the authoritative
+          # GameTest success marker instead of searching for method names.
+          if ($gameTestLog -notmatch '8 tests are now running') {
+            Write-Error "Expected exactly eight registered GameTests, but the startup count was not found."
             Get-Content -Path $latestLog -Tail 120
             exit 1
           }
-          Write-Host "SUCCESS: GameTest server exited cleanly and all eight expected test names were found."
+          if ($gameTestLog -notmatch '8 GAME TESTS COMPLETE' -or $gameTestLog -notmatch 'All 8 required tests passed') {
+            Write-Error "GameTest process exited successfully but did not report that all eight required tests passed."
+            Get-Content -Path $latestLog -Tail 120
+            exit 1
+          }
+          Write-Host "SUCCESS: all eight registered GameTests completed and passed."
 
       - name: Launch Minecraft client and check startup
         if: github.event_name == 'workflow_dispatch'
@@ -162,7 +158,7 @@ jobs:
             "- Server GameTests: $env:GAMETEST_RESULT",
             "- Client startup smoke test: $client",
             '',
-            'A GameTest run is accepted only when all eight expected test names appear in latest.log and the task exits with code zero.',
+            'A GameTest run is accepted only when eight tests are registered, the log reports all eight completed and passed, and the task exits with code zero.',
             'The client smoke test waits up to eight minutes for the Done marker. A timeout is not labelled as a confirmed JVM crash.',
             'Client input, visual rendering and full in-world interaction still require dedicated client-side tests or a manual gameplay checklist.'
           )
