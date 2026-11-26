@@ -1,6 +1,10 @@
 name: Windows Minecraft Test
 
 on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
   workflow_dispatch:
 
 permissions:
@@ -12,7 +16,8 @@ concurrency:
 
 jobs:
   build-and-launch:
-    # Manual-only job on the owner's registered Windows runner.
+    # Automated server GameTests run on every main push / PR. The interactive
+    # client smoke test remains manual so normal commits do not open a window.
     runs-on: [self-hosted, Windows, X64]
     timeout-minutes: 25
 
@@ -33,21 +38,26 @@ jobs:
         uses: gradle/actions/setup-gradle@v4
 
       - name: Build mod
+        id: build
         shell: powershell -NoProfile -ExecutionPolicy Bypass -Command "& '{0}'"
-        run: .\gradlew.bat build --no-daemon
+        run: .\\gradlew.bat build --no-daemon
 
       - name: Run server-side GameTests
+        id: gametests
         shell: powershell -NoProfile -ExecutionPolicy Bypass -Command "& '{0}'"
         timeout-minutes: 8
         run: |
           Write-Host "Running NeoForge GameTests for sablemobbreaker..."
-          .\gradlew.bat runGameTestServer --no-daemon --stacktrace
+          .\\gradlew.bat runGameTestServer --no-daemon --stacktrace
           if ($LASTEXITCODE -ne 0) {
             Write-Error "NeoForge GameTests failed. See run/logs/latest.log in the uploaded artifact."
             exit $LASTEXITCODE
           }
+          Write-Host "SUCCESS: NeoForge GameTest server exited with code 0."
 
       - name: Launch Minecraft client and check startup
+        if: github.event_name == 'workflow_dispatch'
+        id: client
         shell: powershell -NoProfile -ExecutionPolicy Bypass -Command "& '{0}'"
         timeout-minutes: 6
         run: |
@@ -61,7 +71,7 @@ jobs:
           }
 
           $latestLog = Get-ChildItem -Path $env:GITHUB_WORKSPACE -Filter latest.log -Recurse -File -ErrorAction SilentlyContinue |
-            Where-Object { $_.FullName -match '[\\/]run[\\/]logs[\\/]latest\.log$' } |
+            Where-Object { $_.FullName -match '[\\\\/]run[\\\\/]logs[\\\\/]latest\\.log$' } |
             Sort-Object LastWriteTime -Descending |
             Select-Object -First 1
 
@@ -71,7 +81,7 @@ jobs:
           }
 
           $logText = Get-Content -Path $latestLog.FullName -Raw
-          if ($logText -notmatch 'Done \(') {
+          if ($logText -notmatch 'Done \\(') {
             Write-Host "Minecraft did not reach the normal 'Done' startup marker."
             Get-Content -Path $latestLog.FullName -Tail 100
             exit 1
@@ -80,11 +90,35 @@ jobs:
           Write-Host "SUCCESS: Minecraft reached the 'Done' startup marker."
           Write-Host "Log: $($latestLog.FullName)"
 
-      - name: Upload build, logs and crash reports
+      - name: Create AutoTester report
+        if: always()
+        shell: powershell -NoProfile -ExecutionPolicy Bypass -Command "& '{0}'"
+        env:
+          BUILD_RESULT: ${{ steps.build.outcome }}
+          GAMETEST_RESULT: ${{ steps.gametests.outcome }}
+          CLIENT_RESULT: ${{ steps.client.outcome }}
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          $client = if ($env:EVENT_NAME -eq 'workflow_dispatch') { $env:CLIENT_RESULT } else { 'not-run (automatic server-only mode)' }
+          $lines = @(
+            '# SableMobBreaker AutoTester',
+            '',
+            "- Trigger: $env:EVENT_NAME",
+            "- Build: $env:BUILD_RESULT",
+            "- Server GameTests: $env:GAMETEST_RESULT",
+            "- Client startup smoke test: $client",
+            '',
+            'Server GameTests cover block HP, destroyed-block data retention, sublevel isolation, dead-block tracking, oxygen capacity and tool item data.',
+            'Client input, visual rendering and in-world interaction still require dedicated client-side tests or a manual smoke test.'
+          )
+          $lines | Set-Content -Path 'autotest-report.md' -Encoding UTF8
+          $lines | Add-Content -Path $env:GITHUB_STEP_SUMMARY -Encoding UTF8
+
+      - name: Upload build, logs, crash reports and AutoTester report
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: sablemobbreaker-windows-test-${{ github.run_number }}
+          name: sablemobbreaker-autotest-${{ github.run_number }}
           if-no-files-found: warn
           retention-days: 14
           path: |
@@ -92,3 +126,4 @@ jobs:
             run/logs/**
             run/crash-reports/**
             hs_err_pid*.log
+            autotest-report.md
