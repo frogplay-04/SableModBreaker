@@ -146,7 +146,18 @@ jobs:
           Start-Sleep -Seconds 5
           if ($clientJavaPid) { Stop-Process -Id ([int]$clientJavaPid) -Force -ErrorAction SilentlyContinue }
           $gradleProcess.Refresh()
-          if (-not $gradleProcess.HasExited) { & taskkill.exe /PID $gradleProcess.Id /T /F | Out-Null }
+          if (-not $gradleProcess.HasExited) {
+            # The client JVM may already have exited after the TitleScreen marker.
+            # taskkill can then return 1 because one child is already gone; that is
+            # harmless cleanup, not a failed Minecraft startup test.
+            & taskkill.exe /PID $gradleProcess.Id /T /F 2>&1 | ForEach-Object { Write-Host $_ }
+            if ($LASTEXITCODE -ne 0) {
+              Write-Host "Cleanup note: taskkill returned $LASTEXITCODE; the verified main-menu startup remains successful."
+            }
+          }
+          # PowerShell can propagate the last native command's exit code even
+          # when the only nonzero result came from harmless cleanup.
+          $global:LASTEXITCODE = 0
           Write-Host 'Client main-menu smoke test passed; the verified test client was stopped as workflow cleanup.'
       - name: Create AutoTester report
         if: always()
