@@ -79,7 +79,7 @@ jobs:
           }
           Write-Host "SUCCESS: all eight registered GameTests completed and passed."
 
-      - name: Launch Minecraft client and check startup
+      - name: Launch Minecraft client and verify the actual title screen
         if: github.event_name == 'workflow_dispatch'
         id: client
         shell: powershell -NoProfile -ExecutionPolicy Bypass -Command "& '{0}'"
@@ -87,59 +87,67 @@ jobs:
         run: |
           $logPath = Join-Path $env:GITHUB_WORKSPACE 'run\logs\latest.log'
           $crashDir = Join-Path $env:GITHUB_WORKSPACE 'run\crash-reports'
-          $clientProcess = Start-Process -FilePath $env:ComSpec -ArgumentList @('/c', 'gradlew.bat runClient --no-daemon') -WorkingDirectory $env:GITHUB_WORKSPACE -PassThru
+          $jcmd = Join-Path $env:JAVA_HOME 'bin\jcmd.exe'
+          $gradleProcess = Start-Process -FilePath $env:ComSpec -ArgumentList @('/c', 'gradlew.bat runClient --no-daemon') -WorkingDirectory $env:GITHUB_WORKSPACE -PassThru
           $deadline = (Get-Date).AddMinutes(8)
-          $reachedDone = $false
+          $menuReached = $false
+          $clientJavaPid = $null
 
-          Write-Host "Started runClient wrapper PID $($clientProcess.Id). Waiting up to 8 minutes for the Done marker."
+          Write-Host "Started Gradle launcher PID $($gradleProcess.Id). Waiting for the in-game TitleScreen event."
           while ((Get-Date) -lt $deadline) {
             Start-Sleep -Seconds 5
-            $clientProcess.Refresh()
             if (Test-Path $logPath) {
               $currentLog = Get-Content -Path $logPath -Raw -ErrorAction SilentlyContinue
-              if ($currentLog -match 'Done \(') {
-                $reachedDone = $true
-                Write-Host "SUCCESS: Minecraft reached the normal startup marker Done (."
+              if ($currentLog -match 'SABLE_AUTOTEST_MAIN_MENU_REACHED') {
+                $menuReached = $true
+                Write-Host 'SUCCESS: Minecraft constructed its actual TitleScreen (main menu).'
                 break
               }
             }
-            if ($clientProcess.HasExited) {
-              Write-Host "Gradle wrapper exited before Minecraft reached Done. Exit code: $($clientProcess.ExitCode)"
+
+            # runClient starts Minecraft as a separate JVM. Track that JVM, not
+            # the short-lived cmd/Gradle wrapper process.
+            if (Test-Path $jcmd) {
+              $javaList = @(& $jcmd -l 2>$null)
+              $clientLine = $javaList | Where-Object { $_ -match 'net\.neoforged\.devlaunch\.Main' } | Select-Object -First 1
+              if ($clientLine -match '^\s*([0-9]+)\s') { $clientJavaPid = $Matches[1] }
+            }
+            $gradleProcess.Refresh()
+            if ($gradleProcess.HasExited -and -not $clientJavaPid) {
+              Write-Host "Gradle launcher exited with code $($gradleProcess.ExitCode), and no Minecraft JVM was found."
               break
             }
           }
 
-          if (-not $reachedDone) {
-            Write-Host "CLIENT_STARTUP_TIMEOUT_OR_EARLY_EXIT (not automatically classified as a JVM crash)"
-            if (Test-Path $logPath) { Get-Content -Path $logPath -Tail 160 }
+          if (-not $menuReached) {
+            Write-Host 'CLIENT_MAIN_MENU_NOT_REACHED (this alone does not prove a JVM crash)'
+            $gradleProcess.Refresh()
+            Write-Host "Gradle launcher exited: $($gradleProcess.HasExited)"
+            if ($clientJavaPid) { Write-Host "Minecraft JVM PID still detected: $clientJavaPid" }
+            if (Test-Path $logPath) { Get-Content -Path $logPath -Tail 220 }
             if (Test-Path $crashDir) { Get-ChildItem -Path $crashDir -File | ForEach-Object { Write-Host "Crash report: $($_.FullName)" } }
-            $jcmd = Join-Path $env:JAVA_HOME 'bin\jcmd.exe'
             if (Test-Path $jcmd) {
               $diag = Join-Path $env:GITHUB_WORKSPACE 'run\client-jvm-diagnostics.txt'
               & $jcmd -l 2>&1 | Out-File -FilePath $diag -Encoding utf8
               Get-Content $diag
-              $javaIds = @(& $jcmd -l 2>$null | ForEach-Object { if ($_ -match '^([0-9]+)\s') { $Matches[1] } })
-              foreach ($javaId in $javaIds) {
-                $dump = Join-Path $env:GITHUB_WORKSPACE "run\client-thread-dump-$javaId.txt"
-                & $jcmd $javaId Thread.print 2>&1 | Out-File -FilePath $dump -Encoding utf8
+              if ($clientJavaPid) {
+                $dump = Join-Path $env:GITHUB_WORKSPACE "run\client-thread-dump-$clientJavaPid.txt"
+                & $jcmd $clientJavaPid Thread.print 2>&1 | Out-File -FilePath $dump -Encoding utf8
               }
             }
-            if (-not $clientProcess.HasExited) {
-              Write-Host "Stopping the timed-out test process tree after diagnostics."
-              & taskkill.exe /PID $clientProcess.Id /T /F | Out-Null
-            }
+            if ($clientJavaPid) { Stop-Process -Id ([int]$clientJavaPid) -Force -ErrorAction SilentlyContinue }
+            $gradleProcess.Refresh()
+            if (-not $gradleProcess.HasExited) { & taskkill.exe /PID $gradleProcess.Id /T /F | Out-Null }
             exit 1
           }
 
-          # Only terminate the client after startup has been positively verified.
-          Start-Sleep -Seconds 10
-          $clientProcess.Refresh()
-          if (-not $clientProcess.HasExited) {
-            Write-Host "Stopping the already-verified client process tree as workflow cleanup."
-            & taskkill.exe /PID $clientProcess.Id /T /F | Out-Null
-          }
-          Write-Host "Client startup smoke test passed."
-
+          # The TitleScreen marker is emitted from ScreenEvent.Init.Post, so
+          # this is stronger than waiting for a generic log line or Gradle exit.
+          Start-Sleep -Seconds 5
+          if ($clientJavaPid) { Stop-Process -Id ([int]$clientJavaPid) -Force -ErrorAction SilentlyContinue }
+          $gradleProcess.Refresh()
+          if (-not $gradleProcess.HasExited) { & taskkill.exe /PID $gradleProcess.Id /T /F | Out-Null }
+          Write-Host 'Client main-menu smoke test passed; the verified test client was stopped as workflow cleanup.'
       - name: Create AutoTester report
         if: always()
         shell: powershell -NoProfile -ExecutionPolicy Bypass -Command "& '{0}'"
@@ -159,8 +167,8 @@ jobs:
             "- Client startup smoke test: $client",
             '',
             'A GameTest run is accepted only when eight tests are registered, the log reports all eight completed and passed, and the task exits with code zero.',
-            'The client smoke test waits up to eight minutes for the Done marker. A timeout is not labelled as a confirmed JVM crash.',
-            'Client input, visual rendering and full in-world interaction still require dedicated client-side tests or a manual gameplay checklist.'
+            'The client smoke test waits up to eight minutes for a mod-emitted marker from Minecraft TitleScreen initialization. It tracks the actual Minecraft JVM separately from the Gradle wrapper; timeout is not labelled as a confirmed JVM crash.',
+            'The title-screen check confirms startup to the main menu only; client input, visual rendering and full in-world interaction still require dedicated client-side tests or a manual gameplay checklist.'
           )
           $lines | Set-Content -Path 'autotest-report.md' -Encoding UTF8
           $lines | Add-Content -Path $env:GITHUB_STEP_SUMMARY -Encoding UTF8
