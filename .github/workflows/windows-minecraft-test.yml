@@ -1,0 +1,189 @@
+name: Windows Minecraft Test
+
+on:
+  push:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: windows-minecraft-test
+  cancel-in-progress: false
+
+jobs:
+  build-and-launch:
+    runs-on: [self-hosted, Windows, X64]
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+
+      - name: Setup JDK 21
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Build mod
+        id: build
+        shell: powershell -NoProfile -ExecutionPolicy Bypass -Command "& '{0}'"
+        run: .\gradlew.bat build --no-daemon
+
+      - name: Run server-side GameTests
+        id: gametests
+        shell: powershell -NoProfile -ExecutionPolicy Bypass -Command "& '{0}'"
+        timeout-minutes: 10
+        run: |
+          Write-Host "Running NeoForge GameTests for sablemobbreaker..."
+          .\gradlew.bat runGameTestServer --no-daemon --stacktrace
+          $gameTestExit = $LASTEXITCODE
+          $latestLog = Join-Path $env:GITHUB_WORKSPACE 'run\logs\latest.log'
+
+          if (-not (Test-Path $latestLog)) {
+            Write-Error "GameTest log was not created."
+            exit 1
+          }
+
+          $gameTestLog = Get-Content -Path $latestLog -Raw
+          if ($gameTestLog -match 'No test functions were given') {
+            Write-Error "GameTest server started with ZERO registered test functions. This is not a passing test run."
+            Get-Content -Path $latestLog -Tail 100
+            exit 1
+          }
+          if ($gameTestExit -ne 0) {
+            Write-Error "NeoForge GameTests failed with exit code $gameTestExit."
+            Get-Content -Path $latestLog -Tail 120
+            exit $gameTestExit
+          }
+
+          # Minecraft 1.21.1 prints a batch summary rather than individual
+          # method names. Validate the registered count and the authoritative
+          # GameTest success marker instead of searching for method names.
+          if ($gameTestLog -notmatch '8 tests are now running') {
+            Write-Error "Expected exactly eight registered GameTests, but the startup count was not found."
+            Get-Content -Path $latestLog -Tail 120
+            exit 1
+          }
+          if ($gameTestLog -notmatch '8 GAME TESTS COMPLETE' -or $gameTestLog -notmatch 'All 8 required tests passed') {
+            Write-Error "GameTest process exited successfully but did not report that all eight required tests passed."
+            Get-Content -Path $latestLog -Tail 120
+            exit 1
+          }
+          Write-Host "SUCCESS: all eight registered GameTests completed and passed."
+
+      - name: Launch Minecraft client and verify the actual title screen
+        if: github.event_name == 'workflow_dispatch'
+        id: client
+        shell: powershell -NoProfile -ExecutionPolicy Bypass -Command "& '{0}'"
+        timeout-minutes: 12
+        run: |
+          $logPath = Join-Path $env:GITHUB_WORKSPACE 'run\logs\latest.log'
+          $crashDir = Join-Path $env:GITHUB_WORKSPACE 'run\crash-reports'
+          $jcmd = Join-Path $env:JAVA_HOME 'bin\jcmd.exe'
+          $gradleProcess = Start-Process -FilePath $env:ComSpec -ArgumentList @('/c', 'gradlew.bat runClient --no-daemon') -WorkingDirectory $env:GITHUB_WORKSPACE -PassThru
+          $deadline = (Get-Date).AddMinutes(8)
+          $menuReached = $false
+          $clientJavaPid = $null
+
+          Write-Host "Started Gradle launcher PID $($gradleProcess.Id). Waiting for the in-game TitleScreen event."
+          while ((Get-Date) -lt $deadline) {
+            Start-Sleep -Seconds 5
+            if (Test-Path $logPath) {
+              $currentLog = Get-Content -Path $logPath -Raw -ErrorAction SilentlyContinue
+              if ($currentLog -match 'SABLE_AUTOTEST_MAIN_MENU_REACHED') {
+                $menuReached = $true
+                Write-Host 'SUCCESS: Minecraft constructed its actual TitleScreen (main menu).'
+                break
+              }
+            }
+
+            # runClient starts Minecraft as a separate JVM. Track that JVM, not
+            # the short-lived cmd/Gradle wrapper process.
+            if (Test-Path $jcmd) {
+              $javaList = @(& $jcmd -l 2>$null)
+              $clientLine = $javaList | Where-Object { $_ -match 'net\.neoforged\.devlaunch\.Main' } | Select-Object -First 1
+              if ($clientLine -match '^\s*([0-9]+)\s') { $clientJavaPid = $Matches[1] }
+            }
+            $gradleProcess.Refresh()
+            if ($gradleProcess.HasExited -and -not $clientJavaPid) {
+              Write-Host "Gradle launcher exited with code $($gradleProcess.ExitCode), and no Minecraft JVM was found."
+              break
+            }
+          }
+
+          if (-not $menuReached) {
+            Write-Host 'CLIENT_MAIN_MENU_NOT_REACHED (this alone does not prove a JVM crash)'
+            $gradleProcess.Refresh()
+            Write-Host "Gradle launcher exited: $($gradleProcess.HasExited)"
+            if ($clientJavaPid) { Write-Host "Minecraft JVM PID still detected: $clientJavaPid" }
+            if (Test-Path $logPath) { Get-Content -Path $logPath -Tail 220 }
+            if (Test-Path $crashDir) { Get-ChildItem -Path $crashDir -File | ForEach-Object { Write-Host "Crash report: $($_.FullName)" } }
+            if (Test-Path $jcmd) {
+              $diag = Join-Path $env:GITHUB_WORKSPACE 'run\client-jvm-diagnostics.txt'
+              & $jcmd -l 2>&1 | Out-File -FilePath $diag -Encoding utf8
+              Get-Content $diag
+              if ($clientJavaPid) {
+                $dump = Join-Path $env:GITHUB_WORKSPACE "run\client-thread-dump-$clientJavaPid.txt"
+                & $jcmd $clientJavaPid Thread.print 2>&1 | Out-File -FilePath $dump -Encoding utf8
+              }
+            }
+            if ($clientJavaPid) { Stop-Process -Id ([int]$clientJavaPid) -Force -ErrorAction SilentlyContinue }
+            $gradleProcess.Refresh()
+            if (-not $gradleProcess.HasExited) { & taskkill.exe /PID $gradleProcess.Id /T /F | Out-Null }
+            exit 1
+          }
+
+          # The TitleScreen marker is emitted from ScreenEvent.Init.Post, so
+          # this is stronger than waiting for a generic log line or Gradle exit.
+          Start-Sleep -Seconds 5
+          if ($clientJavaPid) { Stop-Process -Id ([int]$clientJavaPid) -Force -ErrorAction SilentlyContinue }
+          $gradleProcess.Refresh()
+          if (-not $gradleProcess.HasExited) { & taskkill.exe /PID $gradleProcess.Id /T /F | Out-Null }
+          Write-Host 'Client main-menu smoke test passed; the verified test client was stopped as workflow cleanup.'
+      - name: Create AutoTester report
+        if: always()
+        shell: powershell -NoProfile -ExecutionPolicy Bypass -Command "& '{0}'"
+        env:
+          BUILD_RESULT: ${{ steps.build.outcome }}
+          GAMETEST_RESULT: ${{ steps.gametests.outcome }}
+          CLIENT_RESULT: ${{ steps.client.outcome }}
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          $client = if ($env:EVENT_NAME -eq 'workflow_dispatch') { $env:CLIENT_RESULT } else { 'not-run (automatic server-only mode)' }
+          $lines = @(
+            '# SableMobBreaker AutoTester',
+            '',
+            "- Trigger: $env:EVENT_NAME",
+            "- Build: $env:BUILD_RESULT",
+            "- Server GameTests: $env:GAMETEST_RESULT",
+            "- Client startup smoke test: $client",
+            '',
+            'A GameTest run is accepted only when eight tests are registered, the log reports all eight completed and passed, and the task exits with code zero.',
+            'The client smoke test waits up to eight minutes for a mod-emitted marker from Minecraft TitleScreen initialization. It tracks the actual Minecraft JVM separately from the Gradle wrapper; timeout is not labelled as a confirmed JVM crash.',
+            'The title-screen check confirms startup to the main menu only; client input, visual rendering and full in-world interaction still require dedicated client-side tests or a manual gameplay checklist.'
+          )
+          $lines | Set-Content -Path 'autotest-report.md' -Encoding UTF8
+          $lines | Add-Content -Path $env:GITHUB_STEP_SUMMARY -Encoding UTF8
+
+      - name: Upload build, logs, crash reports, JVM diagnostics and AutoTester report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: sablemobbreaker-autotest-${{ github.run_number }}
+          if-no-files-found: warn
+          retention-days: 14
+          path: |
+            build/libs/*.jar
+            run/logs/**
+            run/crash-reports/**
+            run/client-*.txt
+            hs_err_pid*.log
+            autotest-report.md
