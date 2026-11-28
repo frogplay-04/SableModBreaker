@@ -167,8 +167,11 @@ public class ClientEvents {
             if (state == null || state.isAir()
                     || state.is(com.FrogPlay.sablemobbreaker.block.ModBlocks.BROKEN_BLOCK.get())) continue;
 
-            int progress = (int) (10.0F * (1.0F - (float) data.hp() / data.maxHp()));
-            progress = Math.max(1, Math.min(9, progress));
+            float damageFraction = 1.0F - (float) data.hp() / (float) data.maxHp();
+            // Minecraft's first crack texture is destroy_stage_0. Keep it visible
+            // even when a block has lost only a single HP.
+            int progress = (int) Math.floor(damageFraction * 10.0F);
+            progress = Math.max(0, Math.min(9, progress));
 
             ResourceLocation texture = ResourceLocation.withDefaultNamespace("textures/block/destroy_stage_" + progress + ".png");
             RenderType type = RenderType.entityTranslucent(texture);
@@ -223,18 +226,31 @@ public class ClientEvents {
             subLevel = subHit.subLevel();
             targetPos = subHit.localPos();
             targetState = subHit.state();
-            if (!WeldGeometry.isEligible(targetState)) return;
+            if (!WeldGeometry.isEligible(targetState)) {
+                clientWeldTrace.clear();
+                clientWeldAssembly = "";
+                return;
+            }
         } else if (mc.hitResult instanceof BlockHitResult hit) {
             targetPos = hit.getBlockPos();
             targetState = mc.level.getBlockState(targetPos);
         }
 
-        if (targetPos == null) return;
+        if (targetPos == null) {
+            clientWeldTrace.clear();
+            clientWeldAssembly = "";
+            return;
+        }
         var blocks = WeldGeometry.findAssembly(mc.level, subLevel, targetPos);
-        if (blocks.isEmpty()) return;
+        if (blocks.isEmpty()) {
+            clientWeldTrace.clear();
+            clientWeldAssembly = "";
+            return;
+        }
 
         String key = (subLevel == null ? "world" : subLevel.getUniqueId().toString()) + ":"
-                + blocks.stream().mapToLong(BlockPos::asLong).min().orElse(0L) + ":" + welding;
+                + blocks.stream().mapToLong(BlockPos::asLong).min().orElse(0L)
+                + ":target:" + targetPos.asLong() + ":" + welding;
         if (!key.equals(clientWeldAssembly)) {
             clientWeldAssembly = key;
             clientWeldTrace.clear();
@@ -242,7 +258,9 @@ public class ClientEvents {
 
         Vec3 eye = subLevel == null ? mc.player.getEyePosition()
                 : subLevel.logicalPose().transformPositionInverse(mc.player.getEyePosition());
-        AABB box = WeldGeometry.bounds(mc.level, subLevel, blocks);
+        // Draw the contour around the selected door/trapdoor itself. Do not outline
+        // the large bounding box of every connected door in the assembly.
+        AABB box = WeldGeometry.boundsAt(mc.level, subLevel, targetPos);
         Vec3[][] localEdges = WeldGeometry.visibleFaceEdges(box, eye);
         Vec3 rayEnd = subLevel == null
                 ? eye.add(mc.player.getLookAngle().scale(6.0D))

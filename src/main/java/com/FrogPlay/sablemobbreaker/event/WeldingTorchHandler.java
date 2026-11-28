@@ -191,39 +191,55 @@ public class WeldingTorchHandler {
             }
 
             if (WeldingTorchItem.isOn(mainHand) && !rightUse && player.tickCount % 5 == 0) {
-                SubLevelContainer container = SubLevelContainer.getContainer(level);
-                if (container != null) {
-                    Vec3 rayStart = player.getEyePosition();
-                    Vec3 rayEnd = rayStart.add(player.getLookAngle().scale(6.0D));
-                    SubLevel targetSubLevel = null;
-                    double closestHit = Double.MAX_VALUE;
+                // Use the same shape-aware Sable raycast as the plasma cutter first.
+                // Bounding-box intersection is retained only as a fallback for invisible
+                // BROKEN_BLOCK placeholders, whose empty shape cannot be ray-hit.
+                Vec3 rayStart = player.getEyePosition();
+                Vec3 rayDirection = player.getLookAngle();
+                SubLevelRaycast.Hit repairHit = SubLevelRaycast.trace(
+                        level, rayStart, rayDirection, 6.0D,
+                        state -> !state.isAir() && !state.is(ModBlocks.BROKEN_BLOCK.get())
+                                && !SubLevelDamageHelper.isIgnoredBlock(state)
+                );
+                double vanillaRepairDistance = player.pick(6.0D, 1.0F, false) instanceof BlockHitResult vanillaBlockHit
+                        ? rayStart.distanceTo(vanillaBlockHit.getLocation()) : Double.MAX_VALUE;
+                SubLevel targetSubLevel = repairHit != null
+                        && repairHit.distance() <= vanillaRepairDistance + 0.20D
+                        ? repairHit.subLevel() : null;
 
-                    for (SubLevel sl : container.getAllSubLevels()) {
-                        if (sl.isRemoved()) continue;
-                        BoundingBox3dc box = sl.boundingBox();
-                        AABB worldBounds = new AABB(box.minX(), box.minY(), box.minZ(),
-                                box.maxX(), box.maxY(), box.maxZ());
-                        java.util.Optional<Vec3> hit = worldBounds.clip(rayStart, rayEnd);
-                        if (hit.isPresent()) {
-                            double distance = hit.get().distanceToSqr(rayStart);
-                            if (distance < closestHit) {
-                                closestHit = distance;
-                                targetSubLevel = sl;
+                if (targetSubLevel == null && repairHit == null) {
+                    SubLevelContainer container = SubLevelContainer.getContainer(level);
+                    if (container != null) {
+                        Vec3 rayEnd = rayStart.add(rayDirection.scale(6.0D));
+                        double closestHit = Double.MAX_VALUE;
+                        for (SubLevel sl : container.getAllSubLevels()) {
+                            if (sl.isRemoved()) continue;
+                            BoundingBox3dc box = sl.boundingBox();
+                            AABB worldBounds = new AABB(box.minX(), box.minY(), box.minZ(),
+                                    box.maxX(), box.maxY(), box.maxZ());
+                            java.util.Optional<Vec3> hit = worldBounds.clip(rayStart, rayEnd);
+                            if (hit.isPresent()) {
+                                double distance = hit.get().distanceToSqr(rayStart);
+                                if (distance <= vanillaRepairDistance * vanillaRepairDistance + 0.40D
+                                        && distance < closestHit) {
+                                    closestHit = distance;
+                                    targetSubLevel = sl;
+                                }
                             }
                         }
                     }
+                }
 
-                    if (targetSubLevel != null) {
-                        int maxToRepair = Math.min(ModConfig.WELD_REPAIR_MAX_BLOCKS.get(), fuel);
-                        int repaired = autoRepair(player, targetSubLevel, true, maxToRepair);
-                        if (repaired > 0) {
-                            int cost = autoRepair(player, targetSubLevel, false, repaired);
-                            if (cost > 0) {
-                                drainFuel(bottle, cost);
-                                WeldingTorchItem.setBottle(mainHand, bottle);
-                                level.playSound(null, player.getX(), player.getY(), player.getZ(),
-                                        SoundEvents.FIRE_AMBIENT, SoundSource.PLAYERS, 0.5f, 1.5f);
-                            }
+                if (targetSubLevel != null) {
+                    int maxToRepair = Math.min(ModConfig.WELD_REPAIR_MAX_BLOCKS.get(), fuel);
+                    int repaired = autoRepair(player, targetSubLevel, true, maxToRepair);
+                    if (repaired > 0) {
+                        int cost = autoRepair(player, targetSubLevel, false, repaired);
+                        if (cost > 0) {
+                            drainFuel(bottle, cost);
+                            WeldingTorchItem.setBottle(mainHand, bottle);
+                            level.playSound(null, player.getX(), player.getY(), player.getZ(),
+                                    SoundEvents.FIRE_AMBIENT, SoundSource.PLAYERS, 0.5f, 1.5f);
                         }
                     }
                 }
@@ -383,9 +399,12 @@ public class WeldingTorchHandler {
                                 // Sable-конструкции получают тот же учёт HP, что и при ударах мобов.
                                 // Один импульс плазмореза снимает ровно 5 HP.
                                 Vec3 blockCenterWorld = data.subLevel.logicalPose().transformPosition(
-                                        new Vec3(data.subLevelLocalPos.getX() + 0.5,
-                                                data.subLevelLocalPos.getY() + 0.5,
-                                                data.subLevelLocalPos.getZ() + 0.5));
+                                        // Keep the inverse pose transform safely inside the
+                                        // intended voxel; floating-point round-off at .5 can
+                                        // otherwise floor to the neighbouring block.
+                                        new Vec3(data.subLevelLocalPos.getX() + 0.501,
+                                                data.subLevelLocalPos.getY() + 0.501,
+                                                data.subLevelLocalPos.getZ() + 0.501));
                                 if (player.tickCount % 5 == 0) {
                                     SubLevelDamageHelper.damageBlockExact(
                                             level, data.subLevel, blockCenterWorld, 5);
@@ -412,7 +431,7 @@ public class WeldingTorchHandler {
 
                     if (level instanceof ServerLevel serverLevel) {
                         if (data.progress > 0.0F) {
-                            int stage = Math.min(9, Math.max(1, (int) (data.progress * 10.0F)));
+                            int stage = Math.min(9, Math.max(0, (int) (data.progress * 10.0F)));
                             serverLevel.destroyBlockProgress(player.getId(), data.pos, stage);
                         }
                     }
@@ -513,6 +532,15 @@ public class WeldingTorchHandler {
         java.util.Set<BlockPos> visited = new java.util.HashSet<>();
         int repaired = 0;
         int repairRange = 6;
+
+        // Match the plasma cutter's shape-aware Sable raycast. The sampled pass below
+        // still runs from the eye so it can also find invisible BROKEN_BLOCK placeholders.
+        SubLevelRaycast.Hit exactHit = SubLevelRaycast.trace(
+                level, worldStart, worldDirection, repairRange,
+                state -> !state.isAir() && !state.is(ModBlocks.BROKEN_BLOCK.get())
+                        && !SubLevelDamageHelper.isIgnoredBlock(state)
+        );
+
         for (double distance = 0.15D; distance <= repairRange; distance += 0.08D) {
             Vec3 worldPoint = worldStart.add(worldDirection.scale(distance));
             Vec3 localPoint = subLevel.logicalPose().transformPositionInverse(worldPoint);
@@ -540,6 +568,16 @@ public class WeldingTorchHandler {
             if (repairBlock(level, subLevel, subId, localPos, worldPoint, player, simulate)) {
                 repaired++;
                 if (repaired >= maxBlocks) break;
+            }
+        }
+
+        // Very thin shapes may be intersected by the raycast without a sample landing
+        // inside their voxel. Fall back to the exact hit only if the sampled pass missed it.
+        if (repaired < maxBlocks && exactHit != null && exactHit.subLevel() == subLevel
+                && visited.add(exactHit.localPos())) {
+            if (repairBlock(level, subLevel, subId, exactHit.localPos(),
+                    exactHit.worldLocation(), player, simulate)) {
+                repaired++;
             }
         }
         return repaired;

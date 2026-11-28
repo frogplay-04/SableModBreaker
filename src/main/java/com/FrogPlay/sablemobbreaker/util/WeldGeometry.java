@@ -5,6 +5,7 @@ import net.minecraft.tags.BlockTags;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.DoorBlock;
 import net.minecraft.world.level.block.TrapDoorBlock;
+import net.minecraft.world.level.block.state.properties.DoubleBlockHalf;
 import net.minecraft.world.level.block.state.BlockState;
 import dev.ryanhcode.sable.api.sublevel.SubLevelContainer;
 import dev.ryanhcode.sable.sublevel.SubLevel;
@@ -97,6 +98,36 @@ public final class WeldGeometry {
             d = new Vec3(b.maxX, b.maxY, plane); e = new Vec3(b.minX, b.maxY, plane);
         }
         return new Vec3[][]{{a,c},{c,d},{d,e},{e,a}};
+    }
+
+    /** Bounds of the selected door (both halves) or trapdoor, not the whole assembly. */
+    public static AABB boundsAt(Level level, SubLevel subLevel, BlockPos pos) {
+        BlockState state = getBlockState(level, subLevel, pos);
+        BlockPos secondHalf = null;
+        if (state.getBlock() instanceof DoorBlock) {
+            secondHalf = pos.relative(state.getValue(DoorBlock.HALF) == DoubleBlockHalf.LOWER
+                    ? net.minecraft.core.Direction.UP : net.minecraft.core.Direction.DOWN);
+            BlockState other = getBlockState(level, subLevel, secondHalf);
+            if (other.getBlock() != state.getBlock()) secondHalf = null;
+        }
+
+        AABB result = shapeBounds(level, state, pos);
+        if (secondHalf != null) {
+            AABB otherBounds = shapeBounds(level, getBlockState(level, subLevel, secondHalf), secondHalf);
+            result = result.minmax(otherBounds);
+        }
+        return result.inflate(0.006D);
+    }
+
+    private static AABB shapeBounds(Level level, BlockState state, BlockPos pos) {
+        VoxelShape shape = state.getShape(level, pos, CollisionContext.empty());
+        AABB result = null;
+        for (AABB local : shape.toAabbs()) {
+            AABB world = local.move(pos);
+            result = result == null ? world : result.minmax(world);
+        }
+        return result == null ? new AABB(pos.getX(), pos.getY(), pos.getZ(),
+                pos.getX() + 1.0D, pos.getY() + 1.0D, pos.getZ() + 1.0D) : result;
     }
 
     public static AABB bounds(Level level, Set<BlockPos> blocks) {

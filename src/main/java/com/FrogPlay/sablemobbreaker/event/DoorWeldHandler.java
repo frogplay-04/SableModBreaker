@@ -124,15 +124,18 @@ public final class DoorWeldHandler {
                 return;
             }
 
-            boolean alreadyWelded = WeldManager.isWelded(level, targetPos, targetState);
+            boolean alreadyWelded = WeldManager.isWelded(level, targetSubLevel, targetPos, targetState);
             if ((welding && alreadyWelded) || (cutting && !alreadyWelded)) {
                 SESSIONS.remove(id);
                 return;
             }
 
             String subLevelKey = targetSubLevel == null ? "world" : targetSubLevel.getUniqueId().toString();
+            // The welding outline follows the exact door/trapdoor block under the crosshair.
+            // The complete connected assembly is still welded/unwelded together.
             String assemblyKey = level.dimension().location() + ":" + subLevelKey + ":"
-                    + assembly.stream().mapToLong(BlockPos::asLong).min().orElse(0L);
+                    + assembly.stream().mapToLong(BlockPos::asLong).min().orElse(0L)
+                    + ":target:" + targetPos.asLong();
 
             Vec3 localEye = targetSubLevel == null
                     ? worldEye
@@ -142,7 +145,7 @@ public final class DoorWeldHandler {
                     || session.welding != welding) {
                 session = new TraceSession(
                         assemblyKey, welding, assembly,
-                        WeldGeometry.bounds(level, targetSubLevel, assembly),
+                        WeldGeometry.boundsAt(level, targetSubLevel, targetPos),
                         localEye, targetSubLevel);
                 SESSIONS.put(id, session);
             }
@@ -182,11 +185,11 @@ public final class DoorWeldHandler {
                 soundLocation = session.subLevel.logicalPose().transformPosition(soundLocation);
             }
             if (welding) {
-                WeldManager.weld(level, session.blocks);
+                WeldManager.weld(level, session.subLevel, session.blocks);
                 level.playSound(null, soundLocation.x, soundLocation.y, soundLocation.z,
                         SoundEvents.FIRE_AMBIENT, SoundSource.BLOCKS, 0.8F, 1.3F);
             } else {
-                WeldManager.unweld(level, session.blocks);
+                WeldManager.unweld(level, session.subLevel, session.blocks);
                 level.playSound(null, soundLocation.x, soundLocation.y, soundLocation.z,
                         SoundEvents.FIRE_EXTINGUISH, SoundSource.BLOCKS, 0.8F, 1.0F);
             }
@@ -216,17 +219,22 @@ public final class DoorWeldHandler {
 
         if (toolHeld && event.getEntity().isShiftKeyDown()) return;
 
+        Vec3 eye = event.getEntity().getEyePosition();
         SubLevelRaycast.Hit subHit = SubLevelRaycast.trace(
-                level, event.getEntity().getEyePosition(), event.getEntity().getLookAngle(), REACH,
+                level, eye, event.getEntity().getLookAngle(), REACH,
                 state -> !state.isAir()
         );
+        HitResult vanillaHit = event.getEntity().pick(REACH, 1.0F, false);
+        double vanillaDistance = vanillaHit instanceof BlockHitResult blockHit
+                ? eye.distanceTo(blockHit.getLocation()) : Double.MAX_VALUE;
+        boolean useSubLevelHit = subHit != null && subHit.distance() <= vanillaDistance + 0.20D;
 
-        BlockPos targetPos = subHit == null ? event.getPos() : subHit.localPos();
-        BlockState targetState = subHit == null
-                ? level.getBlockState(targetPos)
-                : subHit.state();
+        SubLevel targetSubLevel = useSubLevelHit ? subHit.subLevel() : null;
+        BlockPos targetPos = useSubLevelHit ? subHit.localPos()
+                : vanillaHit instanceof BlockHitResult blockHit ? blockHit.getBlockPos() : event.getPos();
+        BlockState targetState = useSubLevelHit ? subHit.state() : level.getBlockState(targetPos);
 
-        if (WeldManager.isWelded(level, targetPos, targetState)) {
+        if (WeldManager.isWelded(level, targetSubLevel, targetPos, targetState)) {
             event.setCanceled(true);
             event.setCancellationResult(cutterUnwelding ? InteractionResult.SUCCESS : InteractionResult.FAIL);
             return;
